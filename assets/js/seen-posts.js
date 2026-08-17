@@ -14,6 +14,11 @@
 		return Math.min(1, Math.max(0.05, safeNumber(config.threshold, 0.5)));
 	}
 
+	function nonNegativeInteger(value, fallback) {
+		value = Number(value);
+		return Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
+	}
+
 	function observerThresholds(maximum) {
 		var thresholds = [0];
 		var step = 0.05;
@@ -60,6 +65,8 @@
 		var history = prune(readHistory());
 		var historyAtLoad = new Set(Object.keys(history));
 		var sessionSeen = new Set();
+		var sessionSeenOrder = [];
+		var recentBuffer = nonNegativeInteger(config.recentBuffer, 2);
 		var autoHiddenSession = new Set();
 		var cards = new Map();
 		var timers = new Map();
@@ -149,7 +156,12 @@
 			if (!fromHistory) {
 				history[id] = Math.floor(Date.now() / 1000);
 				sessionSeen.add(id);
+				sessionSeenOrder.push(id);
 				writeHistory(false);
+				if (sessionSeenOrder.length > recentBuffer) {
+					var releasedId = sessionSeenOrder[sessionSeenOrder.length - recentBuffer - 1];
+					if (cards.has(releasedId)) collapsePassedCard(cards.get(releasedId), releasedId);
+				}
 			}
 			applyCardVisibility(card, id);
 			updateUi();
@@ -191,7 +203,9 @@
 		}
 
 		function collapsePassedCard(card, id) {
-			if (!sessionSeen.has(id) || card.contains(document.activeElement) || card.getBoundingClientRect().bottom > 0) return;
+			var recentStart = Math.max(0, sessionSeenOrder.length - recentBuffer);
+			var orderIndex = sessionSeenOrder.lastIndexOf(id);
+			if (orderIndex >= recentStart || !sessionSeen.has(id) || card.contains(document.activeElement) || card.getBoundingClientRect().bottom > 0) return;
 			queueCollapse(card, id);
 		}
 
@@ -270,6 +284,7 @@
 			history = {};
 			historyAtLoad.clear();
 			sessionSeen.clear();
+			sessionSeenOrder.length = 0;
 			autoHiddenSession.clear();
 			showSeen = false;
 			hideSessionSeen = false;

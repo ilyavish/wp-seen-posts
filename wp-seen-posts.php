@@ -94,6 +94,7 @@ function enqueue_assets(): void {
 		'threshold'     => 0.5,
 		'dwellTime'     => 750,
 		'collapseDelay' => 120,
+		'recentBuffer'  => 2,
 		'maxEntries'    => max( 1, $max_entries ),
 		'retentionDays' => max( 1, $retention_days ),
 		'i18n'          => array(
