@@ -74,6 +74,7 @@
 		var showSeen = false;
 		var hideSessionSeen = false;
 		var feedExhausted = config.hasMorePages === false;
+		var infiniteReady = document.documentElement.classList.contains('wp-pfis-active');
 		var writesSincePrune = 0;
 		var historyWriteTimer = null;
 		var historyDirty = false;
@@ -141,12 +142,17 @@
 			toggle.disabled = count === 0;
 			reset.hidden = historyEntryCount === 0;
 			var visible = cards.size - hiddenCardCount;
-			empty.hidden = !(feedExhausted && cards.size > 0 && visible === 0 && count === cards.size);
+			var allHidden = !showSeen && cards.size > 0 && visible === 0 && count === cards.size;
+			var canStillAdvance = !feedExhausted && (infiniteReady || document.readyState !== 'complete');
+			empty.textContent = canStillAdvance ? config.i18n.loadingUnseen : (feedExhausted ? config.i18n.caughtUp : config.i18n.noUnseenPage);
+			empty.classList.toggle('wp-seen-posts-empty-loading', allHidden && canStillAdvance);
+			empty.hidden = !allHidden;
 		}
 
 		function refreshFeedExhaustion() {
 			var infiniteControls = document.querySelector('.wp-pfis-controls');
 			if (infiniteControls) {
+				infiniteReady = true;
 				feedExhausted = !infiniteControls.querySelector('.wp-pfis-load-more') && !infiniteControls.querySelector('.wp-pfis-sentinel');
 			}
 			updateUi();
@@ -294,7 +300,8 @@
 
 		document.addEventListener('wpFeedInfiniteScrollReady', function (event) {
 			if (event.detail && event.detail.container && event.detail.container !== feed) return;
-			window.setTimeout(continueFeedIfNeeded, 0);
+			infiniteReady = true;
+			continueFeedIfNeeded();
 		});
 
 		document.addEventListener('wpFeedInfiniteScrollFinished', function (event) {
@@ -302,6 +309,7 @@
 			feedExhausted = true;
 			updateUi();
 		});
+		window.addEventListener('load', function () { if (!infiniteReady) updateUi(); }, { once: true });
 
 		initializePosts(adapter.posts);
 		if (earlyHide) earlyHide.release();

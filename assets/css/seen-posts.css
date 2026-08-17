@@ -72,6 +72,11 @@
 	padding: 0.5rem 0.75rem;
 }
 
+.wp-seen-posts-empty-loading {
+	cursor: progress;
+	opacity: 0.75;
+}
+
 .wp-seen-posts-empty[hidden] { display: none; }
 
 /* P2's feed is a list; these controls intentionally sit immediately above it. */

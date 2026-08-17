@@ -13,7 +13,8 @@ const engine = fs.readFileSync(path.join(__dirname, '../assets/js/seen-posts.js'
 function strings() {
 	return {
 		showSeen: 'Show seen', hideSeen: 'Hide seen', seen: 'Seen', reset: 'Reset seen history',
-		confirmReset: 'Reset?', caughtUp: "You're all caught up."
+		confirmReset: 'Reset?', loadingUnseen: 'Loading unseen posts…', noUnseenPage: 'No unseen posts on this page.',
+		caughtUp: "You're all caught up."
 	};
 }
 
@@ -188,11 +189,13 @@ test('allows half a viewport to qualify an exceptionally tall post', async () =>
 	assert.equal(tallCard.dataset.seenPostState, 'seen');
 });
 
-test('shows a compact caught-up status only after the feed is truly exhausted', async () => {
+test('replaces the immediate loading status with caught up only after the feed is exhausted', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const { window } = await boot({ 1: now, 2: now, 3: now }, { hasMorePages: true });
 	const empty = window.document.querySelector('.wp-seen-posts-empty');
-	assert.equal(empty.hidden, true);
+	assert.equal(empty.hidden, false);
+	assert.equal(empty.textContent, 'Loading unseen posts…');
+	assert.equal(empty.classList.contains('wp-seen-posts-empty-loading'), true);
 	assert.equal(empty.querySelector('button'), null);
 
 	const feed = window.document.querySelector('#postlist');
@@ -206,14 +209,26 @@ test('shows a compact caught-up status only after the feed is truly exhausted', 
 	await new Promise((resolve) => window.setTimeout(resolve, 5));
 	assert.equal(empty.hidden, false);
 	assert.equal(empty.textContent, "You're all caught up.");
+	assert.equal(empty.classList.contains('wp-seen-posts-empty-loading'), false);
 });
 
 test('automatically advances an initially all-Seen page when more pages exist', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const { window, loadMoreClicks } = await boot({ 1: now, 2: now }, { hasMorePages: true });
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
-	assert.equal(window.document.querySelector('.wp-seen-posts-empty').hidden, true);
+	const empty = window.document.querySelector('.wp-seen-posts-empty');
+	assert.equal(empty.hidden, false);
+	assert.equal(empty.textContent, 'Loading unseen posts…');
 	assert.equal(loadMoreClicks(), 1);
+
+	const feed = window.document.querySelector('#postlist');
+	const unseen = window.document.createElement('li');
+	unseen.id = 'prologue-3';
+	unseen.className = 'post post-3';
+	feed.appendChild(unseen);
+	window.document.dispatchEvent(new window.CustomEvent('wpFeedPostsAdded', { detail: { container: feed, posts: [unseen] } }));
+	await new Promise((resolve) => window.setTimeout(resolve, 5));
+	assert.equal(empty.hidden, true);
 });
 
 test('reset clears only Seen history and re-observes loaded cards', async () => {
