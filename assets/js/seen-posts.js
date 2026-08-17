@@ -332,7 +332,7 @@
 		window.addEventListener('load', function () { if (!infiniteReady) updateUi(); }, { once: true });
 
 		initializePosts(adapter.posts);
-		if (earlyHide) earlyHide.release();
+		if (earlyHide) earlyHide.release(true);
 		document.documentElement.classList.add('wp-seen-posts-active');
 		window.setTimeout(continueFeedIfNeeded, 0);
 	}

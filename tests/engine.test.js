@@ -82,7 +82,9 @@ test('pre-hides stored cards before the engine takes ownership on reload', async
 				historyWrites += 1;
 				return setItem.apply(this, args);
 			};
-			currentWindow.wpSeenPostsEarlyConfig = { storageKey: 'wp_seen_posts_v1' };
+			currentWindow.wpSeenPostsEarlyConfig = {
+				storageKey: 'wp_seen_posts_v1', previewCount: 2, previewSelector: '#postlist > li.post', seenLabel: 'Seen'
+			};
 			currentWindow.eval(earlyHide);
 			hiddenBeforeEngine = currentWindow.document.querySelector('#prologue-1').classList.contains('wp-seen-posts-prehidden');
 		}
@@ -94,6 +96,67 @@ test('pre-hides stored cards before the engine takes ownership on reload', async
 	assert.equal(historyReads, 1);
 	assert.equal(historyWrites, 0);
 	assert.equal(window.WPSeenPostsEarlyHide.history, null);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-prebadge').length, 0);
+});
+
+test('keeps the two-card preview visible before the footer engine starts', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	let previewsBeforeEngine = 0;
+	let hiddenBeforeEngine = 0;
+	const { window } = await boot({ 1: now, 2: now, 3: now, 4: now }, {
+		postCount: 4,
+		beforeEval(currentWindow) {
+			currentWindow.wpSeenPostsEarlyConfig = {
+				storageKey: 'wp_seen_posts_v1', previewCount: 2, previewSelector: '#postlist > li.post', seenLabel: 'Seen'
+			};
+			currentWindow.eval(earlyHide);
+			previewsBeforeEngine = currentWindow.document.querySelectorAll('.wp-seen-posts-prepreview').length;
+			hiddenBeforeEngine = currentWindow.document.querySelectorAll('.wp-seen-posts-prehidden').length;
+			assert.equal(currentWindow.document.querySelectorAll('.wp-seen-posts-prebadge').length, 2);
+		}
+	});
+	assert.equal(previewsBeforeEngine, 2);
+	assert.equal(hiddenBeforeEngine, 2);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-prepreview, .wp-seen-posts-prehidden').length, 0);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-prebadge').length, 0);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 2);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 2);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
+});
+
+test('does not hide a reserved card when the parser reports it again', async () => {
+	const dom = new JSDOM('<!doctype html><html><body><ul id="postlist"><li id="prologue-1" class="post post-1"></li><li id="prologue-2" class="post post-2"></li><li id="prologue-3" class="post post-3"></li></ul></body></html>', {
+		url: 'https://example.com/', runScripts: 'outside-only'
+	});
+	const { window } = dom;
+	window.document.documentElement.classList.add('wp-seen-posts-active');
+	const now = Math.floor(Date.now() / 1000);
+	window.localStorage.setItem('wp_seen_posts_v1', JSON.stringify({ 1: now, 2: now, 3: now }));
+	window.wpSeenPostsEarlyConfig = {
+		storageKey: 'wp_seen_posts_v1', previewCount: 2, previewSelector: '#postlist > li.post', seenLabel: 'Seen'
+	};
+	window.eval(earlyHide);
+	const first = window.document.querySelector('#prologue-1');
+	first.parentElement.appendChild(first);
+	await new Promise((resolve) => window.setTimeout(resolve, 0));
+	assert.equal(first.classList.contains('wp-seen-posts-prepreview'), true);
+	assert.equal(first.classList.contains('wp-seen-posts-prehidden'), false);
+	assert.equal(first.querySelectorAll(':scope > .wp-seen-posts-prebadge').length, 1);
+});
+
+test('removes an early preview when its stored history has expired', async () => {
+	const expired = Math.floor(Date.now() / 1000) - 366 * 86400;
+	const { window } = await boot({ 1: expired, 2: expired }, {
+		beforeEval(currentWindow) {
+			currentWindow.wpSeenPostsEarlyConfig = {
+				storageKey: 'wp_seen_posts_v1', previewCount: 2, previewSelector: '#postlist > li.post', seenLabel: 'Seen'
+			};
+			currentWindow.eval(earlyHide);
+			assert.equal(currentWindow.document.querySelectorAll('.wp-seen-posts-prebadge').length, 2);
+		}
+	});
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-seen, .wp-seen-posts-is-hidden, .wp-seen-posts-reload-preview').length, 0);
 });
 
 test('releases early-hidden cards if the full engine never activates', () => {

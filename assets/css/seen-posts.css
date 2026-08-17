@@ -45,12 +45,13 @@
 	display: none !important;
 }
 
-.wp-seen-posts-position-context {
-	position: relative;
-}
-
+.wp-seen-posts-prepreview,
 .wp-seen-posts-reload-preview {
 	opacity: 0.88;
+}
+
+.wp-seen-posts-position-context {
+	position: relative;
 }
 
 .wp-seen-posts-badge {
