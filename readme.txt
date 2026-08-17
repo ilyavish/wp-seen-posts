@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.15
+Stable tag: 1.0.16
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,9 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.0.16 =
+* Keeps badge explanations visible inside overflow-clipped P2 layouts and removes Safari's duplicate native title tooltip.
 
 = 1.0.15 =
 * Places single-post Seen feedback inside the post-content metadata row, aligned right across from likes and pageviews and before comments.

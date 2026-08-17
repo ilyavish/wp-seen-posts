@@ -17,7 +17,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - If a reload would otherwise contain no visible cards, two recent Seen cards remain as a stable preview while unseen pages load, avoiding both blank waits and live removal.
 - The small Seen badge is anchored to the bottom-right corner of its post card and keeps the Seen word visible beside the visitor's highest earned badge.
 - At 5, 10, 20, and 50 unique Seen posts, visitors accumulate beer, vodka, tracksuit, and gopnik achievement icons in a light badge shelf aligned opposite the feed buttons.
-- Badge images have descriptive alternative text. Desktop hover/focus and mobile taps explain exactly why each badge was earned.
+- Badge images have descriptive alternative text. Desktop hover/focus and mobile taps show a custom explanation below the badge so P2 and Safari cannot clip it above the feed.
 - A newly unlocked milestone gets one short badge-pop animation and a compact explanatory toast, with motion disabled when the visitor requests reduced motion.
 - On the next page load, previously Seen cards start hidden and can be revealed; the two-card preview is used only when hiding everything would leave the feed empty.
 - Individual blog posts opened directly are recorded after one visible second and visibly show Seen plus earned badges in the post metadata area, right-aligned across from likes and pageviews and before comments; WordPress pages are never tracked by default.

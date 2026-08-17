@@ -267,6 +267,8 @@ test('unlocks the beer milestone beside Seen with a brief, explained achievement
 	assert.equal(achievements.querySelector('img').alt, 'Cute beer badge');
 	assert.equal(achievements.querySelector('.wp-seen-posts-achievement-tooltip').textContent, 'You earned the Beer badge for seeing 5 posts.');
 	const achievementButton = achievements.querySelector('.wp-seen-posts-achievement-button');
+	assert.equal(achievementButton.getAttribute('title'), null);
+	assert.equal(achievementButton.getAttribute('aria-describedby'), 'wp-seen-posts-tooltip-beer');
 	achievementButton.click();
 	assert.equal(achievementButton.getAttribute('aria-expanded'), 'true');
 	window.document.body.click();

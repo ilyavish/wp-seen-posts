@@ -66,6 +66,8 @@
 	max-width: 100%;
 	min-height: 48px;
 	padding: 0.28rem 0.45rem 0.28rem 0.65rem;
+	position: relative;
+	z-index: 20;
 }
 
 .wp-seen-posts-achievements-title,
@@ -127,7 +129,7 @@
 .wp-seen-posts-achievement-tooltip {
 	background: #1d2327;
 	border-radius: 8px;
-	bottom: calc(100% + 8px);
+	bottom: auto;
 	color: #fff;
 	font-size: 0.76rem;
 	font-weight: 600;
@@ -139,6 +141,7 @@
 	position: absolute;
 	right: 0;
 	text-align: left;
+	top: calc(100% + 8px);
 	transform: translateY(4px);
 	transition: opacity 100ms ease, transform 100ms ease, visibility 100ms ease;
 	visibility: hidden;
@@ -251,6 +254,8 @@
 	display: inline-flex;
 	gap: 0.4rem;
 	padding: 0.22rem 0.35rem 0.22rem 0.55rem;
+	position: relative;
+	z-index: 20;
 }
 
 .wp-seen-posts-unlock-toast {
@@ -339,6 +344,7 @@
 		max-width: none;
 		position: fixed;
 		right: 0.75rem;
+		top: auto;
 		width: auto;
 	}
 	.wp-seen-posts-single-status { align-items: flex-end; flex-direction: column; }

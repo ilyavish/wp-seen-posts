@@ -107,7 +107,6 @@
 		button.className = 'wp-seen-posts-achievement-button';
 		button.setAttribute('aria-label', milestone.description);
 		button.setAttribute('aria-expanded', 'false');
-		button.title = milestone.description;
 		var tooltip = document.createElement('span');
 		tooltip.className = 'wp-seen-posts-achievement-tooltip';
 		tooltip.id = 'wp-seen-posts-single-tooltip-' + milestone.key;

@@ -123,6 +123,8 @@ test('shows earned badges on a single post and explains a newly unlocked milesto
 	assert.equal(status.querySelector('.wp-seen-posts-single-achievements-title').textContent, 'Your badges');
 	assert.equal(status.querySelector('.wp-seen-posts-achievement-image').alt, 'Cute beer badge');
 	const button = status.querySelector('.wp-seen-posts-achievement-button');
+	assert.equal(button.getAttribute('title'), null);
+	assert.equal(button.getAttribute('aria-describedby'), 'wp-seen-posts-single-tooltip-beer');
 	button.click();
 	assert.equal(button.getAttribute('aria-expanded'), 'true');
 	window.document.body.click();
