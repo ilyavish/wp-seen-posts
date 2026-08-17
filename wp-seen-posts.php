@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks posts viewed in archive feeds, hides previously seen posts on later visits, and integrates with progressive infinite scrolling.
- * Version:           1.0.18
+ * Version:           1.0.19
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.0.18';
+const VERSION = '1.0.19';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
@@ -100,12 +100,12 @@ function achievement_badges(): array {
 			'url'         => badge_asset_url( 'vodka.png' ),
 		),
 		array(
-			'key'         => 'tracksuit',
+			'key'         => 'barsetka',
 			'threshold'   => 20,
-			'label'       => __( 'Tracksuit badge', 'wp-seen-posts' ),
-			'description' => __( 'You earned the Tracksuit badge for seeing 20 posts.', 'wp-seen-posts' ),
-			'alt'         => __( 'Black tracksuit badge earned after 20 Seen posts', 'wp-seen-posts' ),
-			'url'         => badge_asset_url( 'adidas.png' ),
+			'label'       => __( 'Barsetka badge', 'wp-seen-posts' ),
+			'description' => __( 'You earned the Barsetka waist bag badge for seeing 20 posts.', 'wp-seen-posts' ),
+			'alt'         => __( 'Black barsetka waist bag badge earned after 20 Seen posts', 'wp-seen-posts' ),
+			'url'         => badge_asset_url( 'barsetka.png' ),
 		),
 		array(
 			'key'         => 'gopnik',

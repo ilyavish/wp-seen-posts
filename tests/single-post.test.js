@@ -40,7 +40,7 @@ async function bootSingle(history = {}, options = {}) {
 		badges: [
 			{ key: 'beer', threshold: 5, label: 'Beer badge', description: 'You earned the Beer badge for seeing 5 posts.', alt: 'Cute beer badge', url: 'https://example.com/beer.png' },
 			{ key: 'vodka', threshold: 10, label: 'Vodka badge', description: 'You earned the Vodka badge for seeing 10 posts.', alt: 'Vodka bottle badge', url: 'https://example.com/vodka.png' },
-			{ key: 'tracksuit', threshold: 20, label: 'Tracksuit badge', description: 'You earned the Tracksuit badge for seeing 20 posts.', alt: 'Black tracksuit badge', url: 'https://example.com/adidas.png' },
+			{ key: 'barsetka', threshold: 20, label: 'Barsetka badge', description: 'You earned the Barsetka waist bag badge for seeing 20 posts.', alt: 'Black barsetka waist bag badge', url: 'https://example.com/barsetka.png' },
 			{ key: 'gopnik', threshold: 50, label: 'Gopnik badge', description: 'You earned the Gopnik badge for seeing 50 posts.', alt: 'Gopnik character badge', url: 'https://example.com/gopnik.png' },
 			{ key: 'bmw', threshold: 100, label: 'Black BMW badge', description: 'You earned the Black BMW badge for seeing 100 posts.', alt: 'Black BMW badge', url: 'https://example.com/bmw.png' }
 		],
@@ -157,4 +157,17 @@ test('unlocks and animates the Black BMW badge on a 100th direct post', async ()
 	assert.equal(bmw.classList.contains('wp-seen-posts-achievement-unlocked'), true);
 	assert.equal(bmw.querySelector('img').src, 'https://example.com/bmw.png');
 	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast').textContent.includes('Black BMW badge'), true);
+});
+
+test('unlocks and animates the Barsetka badge on a 20th direct post', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 19 }, (_, index) => [String(index + 100), now]));
+	const { window, recordedDetail } = await bootSingle(history);
+	await new Promise((resolve) => window.setTimeout(resolve, 12));
+	const barsetka = window.document.querySelector('.wp-seen-posts-achievement[data-badge-key="barsetka"]');
+	assert.equal(recordedDetail().unlocked, 'barsetka');
+	assert.equal(barsetka.classList.contains('wp-seen-posts-achievement-unlocked'), true);
+	assert.equal(barsetka.querySelector('img').src, 'https://example.com/barsetka.png');
+	assert.equal(barsetka.querySelector('.wp-seen-posts-achievement-tooltip').textContent, 'You earned the Barsetka waist bag badge for seeing 20 posts.');
+	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast').textContent.includes('Barsetka waist bag badge'), true);
 });
