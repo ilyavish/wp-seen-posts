@@ -14,8 +14,17 @@ function strings() {
 	return {
 		showSeen: 'Show seen', hideSeen: 'Hide seen', seen: 'Seen', reset: 'Reset seen history',
 		confirmReset: 'Reset?', loadingUnseen: 'Loading unseen posts…', noUnseenPage: 'No unseen posts on this page.',
-		caughtUp: "You're all caught up."
+		caughtUp: "You're all caught up.", achievements: 'Seen achievements'
 	};
+}
+
+function badges() {
+	return [
+		{ key: 'beer', threshold: 5, label: 'Beer badge — 5 Seen posts', url: 'https://example.com/badges/beer.png' },
+		{ key: 'vodka', threshold: 10, label: 'Vodka badge — 10 Seen posts', url: 'https://example.com/badges/vodka.png' },
+		{ key: 'tracksuit', threshold: 20, label: 'Adidas tracksuit badge — 20 Seen posts', url: 'https://example.com/badges/adidas.png' },
+		{ key: 'gopnik', threshold: 50, label: 'Gopnik badge — 50 Seen posts', url: 'https://example.com/badges/gopnik.png' }
+	];
 }
 
 async function boot(history = {}, options = {}) {
@@ -55,7 +64,7 @@ async function boot(history = {}, options = {}) {
 		theme: 'p2', selectors: {}, storageKey: 'wp_seen_posts_v1', threshold: 0.5,
 		dwellTime: 5, hasMorePages: options.hasMorePages ?? false,
 		reloadPreviewCount: options.reloadPreviewCount ?? 2,
-		maxEntries: 3000, retentionDays: 365, i18n: strings()
+		maxEntries: 3000, retentionDays: 365, badges: badges(), i18n: strings()
 	};
 	window.confirm = () => true;
 	if (options.beforeEval) options.beforeEval(window);
@@ -241,6 +250,40 @@ test('keeps a newly Seen card visible after it is scrolled past and reveals prio
 	window.document.querySelector('.wp-seen-posts-toggle').click();
 	assert.equal(oldCard.classList.contains('wp-seen-posts-is-hidden'), false);
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
+});
+
+test('unlocks the beer milestone and replaces Seen with its image', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const { window, observer } = await boot({ 1: now, 2: now, 3: now, 4: now }, { postCount: 5 });
+	const achievements = window.document.querySelector('.wp-seen-posts-achievements');
+	assert.equal(achievements.hidden, true);
+	const fifth = window.document.querySelector('#prologue-5');
+	observer.trigger(fifth, 0.5);
+	await new Promise((resolve) => window.setTimeout(resolve, 10));
+	assert.equal(achievements.hidden, false);
+	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer']);
+	assert.equal(achievements.querySelector('img').src, 'https://example.com/badges/beer.png');
+	const cardBadge = fifth.querySelector(':scope > .wp-seen-posts-badge');
+	assert.equal(cardBadge.textContent, '');
+	assert.equal(cardBadge.getAttribute('aria-label'), 'Beer badge — 5 Seen posts');
+	assert.equal(cardBadge.querySelector('img').src, 'https://example.com/badges/beer.png');
+});
+
+test('accumulates all earned milestones and uses the highest badge on cards', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 50 }, (_, index) => [String(index + 1), now]));
+	const { window } = await boot(history);
+	const achievements = window.document.querySelector('.wp-seen-posts-achievements');
+	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer', 'vodka', 'tracksuit', 'gopnik']);
+	assert.equal(achievements.querySelectorAll('img').length, 4);
+	window.document.querySelectorAll('.wp-seen-posts-badge').forEach((badge) => {
+		assert.equal(badge.getAttribute('aria-label'), 'Gopnik badge — 50 Seen posts');
+		assert.equal(badge.querySelector('img').src, 'https://example.com/badges/gopnik.png');
+	});
+	window.document.querySelector('.wp-seen-posts-reset').click();
+	assert.equal(achievements.hidden, true);
+	assert.equal(achievements.children.length, 0);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
 });
 
 test('initializes only supplied infinite-scroll posts without advancing while visible content remains', async () => {

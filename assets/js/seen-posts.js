@@ -55,6 +55,20 @@
 		} catch (error) { return {}; }
 	}
 
+	function readMilestones() {
+		if (!Array.isArray(config.badges)) return [];
+		return config.badges.map(function (badge) {
+			return {
+				key: badge && typeof badge.key === 'string' ? badge.key : '',
+				threshold: Math.floor(Number(badge && badge.threshold) || 0),
+				label: badge && typeof badge.label === 'string' ? badge.label : '',
+				url: badge && typeof badge.url === 'string' ? badge.url : ''
+			};
+		}).filter(function (badge) {
+			return badge.key && badge.threshold > 0 && badge.label && badge.url;
+		}).sort(function (a, b) { return a.threshold - b.threshold; });
+	}
+
 	function init() {
 		var earlyHide = window.WPSeenPostsEarlyHide;
 		if (earlyHide) earlyHide.stop();
@@ -71,6 +85,7 @@
 		if (earlyHide) earlyHide.history = null;
 		var historyAtLoad = new Set(Object.keys(history));
 		var historyEntryCount = historyAtLoad.size;
+		var milestones = readMilestones();
 		var reloadPreviewIds = new Set();
 		var reloadPreviewCount = Number(config.reloadPreviewCount);
 		if (!Number.isFinite(reloadPreviewCount) || reloadPreviewCount < 0) reloadPreviewCount = 2;
@@ -91,6 +106,8 @@
 		var writesSincePrune = 0;
 		var historyWriteTimer = null;
 		var historyDirty = false;
+		var achievementSignature = '';
+		var activeMilestoneKey = '';
 
 		function flushHistory(forcePrune) {
 			if (historyWriteTimer) window.clearTimeout(historyWriteTimer);
@@ -122,7 +139,13 @@
 		reset.type = 'button';
 		reset.className = 'wp-seen-posts-reset';
 		reset.textContent = config.i18n.reset;
+		var achievements = document.createElement('div');
+		achievements.className = 'wp-seen-posts-achievements';
+		achievements.hidden = true;
+		achievements.setAttribute('role', 'list');
+		achievements.setAttribute('aria-label', config.i18n.achievements || 'Seen achievements');
 		controls.appendChild(toggle);
+		controls.appendChild(achievements);
 		controls.appendChild(reset);
 		feed.insertAdjacentElement('beforebegin', controls);
 
@@ -148,7 +171,73 @@
 			card.setAttribute('aria-hidden', hidden ? 'true' : 'false');
 		}
 
+		function currentMilestone() {
+			var current = null;
+			milestones.forEach(function (milestone) {
+				if (historyEntryCount >= milestone.threshold) current = milestone;
+			});
+			return current;
+		}
+
+		function createMilestoneImage(milestone, className, size) {
+			var image = document.createElement('img');
+			image.className = className;
+			image.src = milestone.url;
+			image.alt = '';
+			image.width = size;
+			image.height = size;
+			image.decoding = 'async';
+			image.setAttribute('aria-hidden', 'true');
+			return image;
+		}
+
+		function renderCardBadge(badge) {
+			var milestone = currentMilestone();
+			while (badge.firstChild) badge.removeChild(badge.firstChild);
+			badge.classList.toggle('wp-seen-posts-badge-earned', Boolean(milestone));
+			if (!milestone) {
+				badge.textContent = config.i18n.seen;
+				badge.removeAttribute('aria-label');
+				badge.removeAttribute('title');
+				return;
+			}
+			badge.setAttribute('aria-label', milestone.label);
+			badge.title = milestone.label;
+			badge.appendChild(createMilestoneImage(milestone, 'wp-seen-posts-badge-image', 24));
+		}
+
+		function updateAchievements() {
+			var earned = milestones.filter(function (milestone) { return historyEntryCount >= milestone.threshold; });
+			var signature = earned.map(function (milestone) { return milestone.key; }).join(',');
+			if (signature !== achievementSignature) {
+				achievementSignature = signature;
+				while (achievements.firstChild) achievements.removeChild(achievements.firstChild);
+				earned.forEach(function (milestone) {
+					var item = document.createElement('span');
+					item.className = 'wp-seen-posts-achievement';
+					item.dataset.badgeKey = milestone.key;
+					item.setAttribute('role', 'listitem');
+					item.setAttribute('aria-label', milestone.label);
+					item.title = milestone.label;
+					item.appendChild(createMilestoneImage(milestone, 'wp-seen-posts-achievement-image', 32));
+					achievements.appendChild(item);
+				});
+				achievements.hidden = earned.length === 0;
+			}
+
+			var active = currentMilestone();
+			var nextActiveKey = active ? active.key : '';
+			if (nextActiveKey !== activeMilestoneKey) {
+				activeMilestoneKey = nextActiveKey;
+				cards.forEach(function (card) {
+					var badge = card.querySelector(':scope > .wp-seen-posts-badge');
+					if (badge) renderCardBadge(badge);
+				});
+			}
+		}
+
 		function updateUi() {
+			updateAchievements();
 			var count = seenCardCount;
 			toggle.textContent = showSeen ? config.i18n.hideSeen : config.i18n.showSeen + ' (' + count + ')';
 			toggle.setAttribute('aria-expanded', showSeen ? 'true' : 'false');
@@ -190,27 +279,29 @@
 		}
 
 		function ensureBadge(card) {
-			if (card.querySelector(':scope > .wp-seen-posts-badge')) return;
-			var cardPosition = window.getComputedStyle(card).position;
-			if (!cardPosition || cardPosition === 'static') card.classList.add('wp-seen-posts-position-context');
-			var badge = document.createElement('span');
-			badge.className = 'wp-seen-posts-badge';
-			badge.textContent = config.i18n.seen;
-			card.insertAdjacentElement('afterbegin', badge);
+			var badge = card.querySelector(':scope > .wp-seen-posts-badge');
+			if (!badge) {
+				var cardPosition = window.getComputedStyle(card).position;
+				if (!cardPosition || cardPosition === 'static') card.classList.add('wp-seen-posts-position-context');
+				badge = document.createElement('span');
+				badge.className = 'wp-seen-posts-badge';
+				card.insertAdjacentElement('afterbegin', badge);
+			}
+			renderCardBadge(badge);
 		}
 
 		function setSeen(card, id, fromHistory, deferUi) {
 			if (card.dataset.seenPostState !== 'seen') seenCardCount += 1;
 			card.classList.add('wp-seen-posts-is-seen');
 			card.dataset.seenPostState = 'seen';
-			if (!fromHistory || reloadPreviewIds.has(id)) ensureBadge(card);
-			card.classList.toggle('wp-seen-posts-reload-preview', reloadPreviewIds.has(id));
 			if (!fromHistory) {
 				if (!Object.prototype.hasOwnProperty.call(history, id)) historyEntryCount += 1;
 				history[id] = Math.floor(Date.now() / 1000);
 				sessionSeen.add(id);
 				scheduleHistoryWrite();
 			}
+			if (!fromHistory || reloadPreviewIds.has(id)) ensureBadge(card);
+			card.classList.toggle('wp-seen-posts-reload-preview', reloadPreviewIds.has(id));
 			observer.unobserve(card);
 			applyCardVisibility(card, id);
 			if (!deferUi) updateUi();

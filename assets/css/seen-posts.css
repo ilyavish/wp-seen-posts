@@ -1,6 +1,7 @@
 .wp-seen-posts-controls {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 0.75rem;
 	margin: 0 0 1rem;
 }
@@ -27,17 +28,63 @@
 .wp-seen-posts-reset {
 	align-items: center;
 	appearance: none;
-	background: none;
-	border: 0;
-	color: inherit;
+	background: #fff;
+	border: 1px solid #8c8f94;
+	border-radius: 3px;
+	color: #1d2327;
 	cursor: pointer;
 	display: inline-flex;
 	font: inherit;
-	font-size: 0.85em;
 	min-height: 44px;
-	opacity: 0.65;
-	padding: 0.35rem 0;
-	text-decoration: underline;
+	padding: 0.35rem 0.7rem;
+	text-decoration: none;
+}
+
+.wp-seen-posts-reset[hidden] {
+	display: none;
+}
+
+.wp-seen-posts-toggle:not(:disabled):hover,
+.wp-seen-posts-reset:hover {
+	background: #dcdcde;
+}
+
+.wp-seen-posts-toggle:focus-visible,
+.wp-seen-posts-reset:focus-visible {
+	outline: 2px solid #2271b1;
+	outline-offset: 2px;
+}
+
+.wp-seen-posts-achievements {
+	align-items: center;
+	background: #1d2327;
+	border: 2px solid #d63638;
+	border-radius: 999px;
+	display: inline-flex;
+	gap: 0.25rem;
+	min-height: 44px;
+	padding: 0.2rem 0.4rem;
+}
+
+.wp-seen-posts-achievements[hidden] {
+	display: none;
+}
+
+.wp-seen-posts-achievement {
+	align-items: center;
+	background: #fff;
+	border-radius: 999px;
+	display: inline-flex;
+	height: 34px;
+	justify-content: center;
+	width: 34px;
+}
+
+.wp-seen-posts-achievement-image {
+	display: block;
+	height: 30px;
+	object-fit: contain;
+	width: 30px;
 }
 
 .wp-seen-posts-is-hidden,
@@ -70,6 +117,22 @@
 	z-index: 1;
 }
 
+.wp-seen-posts-badge-earned {
+	align-items: center;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	display: inline-flex;
+	justify-content: center;
+	padding: 0.18rem;
+}
+
+.wp-seen-posts-badge-image {
+	display: block;
+	height: 24px;
+	object-fit: contain;
+	width: 24px;
+}
+
 .wp-seen-posts-empty {
 	border-left: 3px solid #8c8f94;
 	font-weight: 600;
@@ -87,3 +150,8 @@
 /* P2's feed is a list; these controls intentionally sit immediately above it. */
 #main > .wp-seen-posts-controls,
 #main > .wp-seen-posts-empty { margin-left: 0; margin-right: 0; }
+
+@media (max-width: 600px) {
+	.wp-seen-posts-controls { gap: 0.5rem; }
+	.wp-seen-posts-achievements { max-width: 100%; }
+}

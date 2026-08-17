@@ -16,11 +16,14 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - During an automatic advance with no preview available, a compact “Loading unseen posts…” status appears instead of an unexplained empty feed.
 - If a reload would otherwise contain no visible cards, two recent Seen cards remain as a stable preview while unseen pages load, avoiding both blank waits and live removal.
 - The small Seen badge is anchored to the bottom-right corner of its post card.
+- At 5, 10, 20, and 50 unique Seen posts, visitors accumulate beer, vodka, tracksuit, and gopnik achievement icons beside the controls; the highest earned icon replaces the Seen word on cards.
 - On the next page load, previously Seen cards start hidden and can be revealed; the two-card preview is used only when hiding everything would leave the feed empty.
+- Individual blog posts opened directly are recorded after one visible second, so visits from search engines and widgets count; WordPress pages are never tracked by default.
 - Anonymous state is stored as `{ postId: unixTimestamp }` in `wp_seen_posts_v1`.
 - History defaults to 365 days and 3,000 IDs. Use `WP_SEEN_POSTS_RETENTION_DAYS`, `WP_SEEN_POSTS_MAX_ENTRIES`, or their matching filters to change the limits.
 - The server archive query remains untouched and cacheable.
 - Full post markup remains server-rendered; hiding is a visitor-side interaction and does not remove content from the HTML response used by search engines.
+- Achievement artwork is bundled as four optimized 96×96 transparent PNGs and only earned images are loaded.
 
 ## Supported markup
 

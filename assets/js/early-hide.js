@@ -17,6 +17,16 @@
 	var previewCount = Math.max(0, Math.floor(Number(config.previewCount) || 0));
 	var previewSelector = typeof config.previewSelector === 'string' ? config.previewSelector : '';
 	var seenLabel = typeof config.seenLabel === 'string' && config.seenLabel ? config.seenLabel : 'Seen';
+	var milestones = Array.isArray(config.badges) ? config.badges.map(function (badge) {
+		return {
+			key: badge && typeof badge.key === 'string' ? badge.key : '',
+			threshold: Math.floor(Number(badge && badge.threshold) || 0),
+			label: badge && typeof badge.label === 'string' ? badge.label : '',
+			url: badge && typeof badge.url === 'string' ? badge.url : ''
+		};
+	}).filter(function (badge) {
+		return badge.key && badge.threshold > 0 && badge.label && badge.url;
+	}).sort(function (a, b) { return a.threshold - b.threshold; }) : [];
 	var previewCards = [];
 	var foundUnseenPreviewCard = false;
 
@@ -49,7 +59,24 @@
 		element.classList.add('wp-seen-posts-prepreview', 'wp-seen-posts-position-context');
 		var badge = document.createElement('span');
 		badge.className = 'wp-seen-posts-badge wp-seen-posts-prebadge';
-		badge.textContent = seenLabel;
+		var milestone = null;
+		milestones.forEach(function (candidate) {
+			if (seenIds.size >= candidate.threshold) milestone = candidate;
+		});
+		if (milestone) {
+			badge.classList.add('wp-seen-posts-badge-earned');
+			badge.setAttribute('aria-label', milestone.label);
+			badge.title = milestone.label;
+			var image = document.createElement('img');
+			image.className = 'wp-seen-posts-badge-image';
+			image.src = milestone.url;
+			image.alt = '';
+			image.width = 24;
+			image.height = 24;
+			image.decoding = 'async';
+			image.setAttribute('aria-hidden', 'true');
+			badge.appendChild(image);
+		} else badge.textContent = seenLabel;
 		element.insertAdjacentElement('afterbegin', badge);
 		previewCards.push(element);
 	}
