@@ -49,6 +49,10 @@
 	position: relative;
 }
 
+.wp-seen-posts-reload-preview {
+	opacity: 0.88;
+}
+
 .wp-seen-posts-badge {
 	background: #f0f0f1;
 	border-radius: 999px;

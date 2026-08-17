@@ -54,6 +54,7 @@ async function boot(history = {}, options = {}) {
 	window.wpSeenPostsConfig = {
 		theme: 'p2', selectors: {}, storageKey: 'wp_seen_posts_v1', threshold: 0.5,
 		dwellTime: 5, hasMorePages: options.hasMorePages ?? false,
+		reloadPreviewCount: options.reloadPreviewCount ?? 2,
 		maxEntries: 3000, retentionDays: 365, i18n: strings()
 	};
 	window.confirm = () => true;
@@ -100,6 +101,7 @@ test('initializes a large Seen history without calculating hidden badge layouts'
 	let computedStyleCalls = 0;
 	const { window } = await boot(history, {
 		postCount: 500,
+		reloadPreviewCount: 0,
 		beforeEval(currentWindow) {
 			const getComputedStyle = currentWindow.getComputedStyle.bind(currentWindow);
 			currentWindow.getComputedStyle = (...args) => {
@@ -193,9 +195,9 @@ test('replaces the immediate loading status with caught up only after the feed i
 	const now = Math.floor(Date.now() / 1000);
 	const { window } = await boot({ 1: now, 2: now, 3: now }, { hasMorePages: true });
 	const empty = window.document.querySelector('.wp-seen-posts-empty');
-	assert.equal(empty.hidden, false);
+	assert.equal(empty.hidden, true);
 	assert.equal(empty.textContent, 'Loading unseen posts…');
-	assert.equal(empty.classList.contains('wp-seen-posts-empty-loading'), true);
+	assert.equal(empty.classList.contains('wp-seen-posts-empty-loading'), false);
 	assert.equal(empty.querySelector('button'), null);
 
 	const feed = window.document.querySelector('#postlist');
@@ -212,23 +214,34 @@ test('replaces the immediate loading status with caught up only after the feed i
 	assert.equal(empty.classList.contains('wp-seen-posts-empty-loading'), false);
 });
 
-test('automatically advances an initially all-Seen page when more pages exist', async () => {
+test('keeps two stable Seen previews while automatically loading an unseen page', async () => {
 	const now = Math.floor(Date.now() / 1000);
-	const { window, loadMoreClicks } = await boot({ 1: now, 2: now }, { hasMorePages: true });
+	const { window, loadMoreClicks } = await boot({ 1: now, 2: now, 3: now, 4: now }, { postCount: 4, hasMorePages: true });
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 2);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview > .wp-seen-posts-badge').length, 2);
 	const empty = window.document.querySelector('.wp-seen-posts-empty');
-	assert.equal(empty.hidden, false);
+	assert.equal(empty.hidden, true);
 	assert.equal(empty.textContent, 'Loading unseen posts…');
 	assert.equal(loadMoreClicks(), 1);
 
 	const feed = window.document.querySelector('#postlist');
 	const unseen = window.document.createElement('li');
-	unseen.id = 'prologue-3';
-	unseen.className = 'post post-3';
+	unseen.id = 'prologue-5';
+	unseen.className = 'post post-5';
 	feed.appendChild(unseen);
 	window.document.dispatchEvent(new window.CustomEvent('wpFeedPostsAdded', { detail: { container: feed, posts: [unseen] } }));
 	await new Promise((resolve) => window.setTimeout(resolve, 5));
 	assert.equal(empty.hidden, true);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 2);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
+
+	const toggle = window.document.querySelector('.wp-seen-posts-toggle');
+	toggle.click();
+	toggle.click();
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 0);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 4);
+	assert.equal(unseen.classList.contains('wp-seen-posts-is-hidden'), false);
 });
 
 test('reset clears only Seen history and re-observes loaded cards', async () => {

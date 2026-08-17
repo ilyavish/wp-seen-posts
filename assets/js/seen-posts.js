@@ -66,6 +66,14 @@
 		var history = prune(readHistory());
 		var historyAtLoad = new Set(Object.keys(history));
 		var historyEntryCount = historyAtLoad.size;
+		var reloadPreviewIds = new Set();
+		var reloadPreviewCount = Number(config.reloadPreviewCount);
+		if (!Number.isFinite(reloadPreviewCount) || reloadPreviewCount < 0) reloadPreviewCount = 2;
+		reloadPreviewCount = Math.floor(reloadPreviewCount);
+		var initialPostIds = Array.prototype.map.call(adapter.posts || [], function (card) { return adapters.postId(card); }).filter(Boolean);
+		if (initialPostIds.length && initialPostIds.every(function (id) { return historyAtLoad.has(id); })) {
+			initialPostIds.slice(0, reloadPreviewCount).forEach(function (id) { reloadPreviewIds.add(id); });
+		}
 		var sessionSeen = new Set();
 		var cards = new Map();
 		var timers = new Map();
@@ -124,6 +132,7 @@
 
 		function shouldHide(id) {
 			if (showSeen) return false;
+			if (reloadPreviewIds.has(id)) return false;
 			return historyAtLoad.has(id) || (hideSessionSeen && sessionSeen.has(id));
 		}
 
@@ -144,9 +153,10 @@
 			var visible = cards.size - hiddenCardCount;
 			var allHidden = !showSeen && cards.size > 0 && visible === 0 && count === cards.size;
 			var canStillAdvance = !feedExhausted && (infiniteReady || document.readyState !== 'complete');
+			var previewOnly = !showSeen && reloadPreviewIds.size > 0 && count === cards.size;
 			empty.textContent = canStillAdvance ? config.i18n.loadingUnseen : (feedExhausted ? config.i18n.caughtUp : config.i18n.noUnseenPage);
 			empty.classList.toggle('wp-seen-posts-empty-loading', allHidden && canStillAdvance);
-			empty.hidden = !allHidden;
+			empty.hidden = !(allHidden || (previewOnly && !canStillAdvance));
 		}
 
 		function refreshFeedExhaustion() {
@@ -161,8 +171,8 @@
 		function requestMoreIfAllHidden() {
 			if (feedExhausted || showSeen || !cards.size) return;
 			var hasVisibleCard = false;
-			cards.forEach(function (card) {
-				if (!card.classList.contains('wp-seen-posts-is-hidden')) hasVisibleCard = true;
+			cards.forEach(function (card, id) {
+				if (!reloadPreviewIds.has(id) && !card.classList.contains('wp-seen-posts-is-hidden')) hasVisibleCard = true;
 			});
 			if (hasVisibleCard) return;
 
@@ -189,7 +199,8 @@
 			if (card.dataset.seenPostState !== 'seen') seenCardCount += 1;
 			card.classList.add('wp-seen-posts-is-seen');
 			card.dataset.seenPostState = 'seen';
-			if (!fromHistory) ensureBadge(card);
+			if (!fromHistory || reloadPreviewIds.has(id)) ensureBadge(card);
+			card.classList.toggle('wp-seen-posts-reload-preview', reloadPreviewIds.has(id));
 			if (!fromHistory) {
 				if (!Object.prototype.hasOwnProperty.call(history, id)) historyEntryCount += 1;
 				history[id] = Math.floor(Date.now() / 1000);
@@ -255,9 +266,13 @@
 
 		function setShowSeen(value) {
 			showSeen = value;
-			if (!value) hideSessionSeen = true;
+			if (!value) {
+				hideSessionSeen = true;
+				reloadPreviewIds.clear();
+			}
 			cards.forEach(function (card, id) {
 				if (value && card.dataset.seenPostState === 'seen') ensureBadge(card);
+				card.classList.toggle('wp-seen-posts-reload-preview', reloadPreviewIds.has(id));
 				applyCardVisibility(card, id);
 			});
 			updateUi();
@@ -275,12 +290,13 @@
 			historyEntryCount = 0;
 			historyAtLoad.clear();
 			sessionSeen.clear();
+			reloadPreviewIds.clear();
 			seenCardCount = 0;
 			hiddenCardCount = 0;
 			showSeen = false;
 			hideSessionSeen = false;
 			cards.forEach(function (card) {
-				card.classList.remove('wp-seen-posts-is-seen', 'wp-seen-posts-is-hidden');
+				card.classList.remove('wp-seen-posts-is-seen', 'wp-seen-posts-is-hidden', 'wp-seen-posts-reload-preview');
 				card.classList.remove('wp-seen-posts-position-context');
 				card.removeAttribute('aria-hidden');
 				card.dataset.seenPostState = 'unseen';

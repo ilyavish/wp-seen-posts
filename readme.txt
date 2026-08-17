@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.9
+Stable tag: 1.0.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,6 +19,7 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Keeps newly Seen posts visible for the rest of the current page session to prevent scroll-time layout shifts.
 * Shows one compact caught-up status only when no more archive pages remain.
 * Automatically skips fully Seen pages through the companion infinite-scroll control.
+* Keeps two recent Seen cards visible as a stable preview if a reload would otherwise look empty.
 * Places the Seen label in the bottom-right corner of each post card.
 * Hides previously Seen posts on the next page load.
 * Stores anonymous history only in localStorage, with age and size pruning.
@@ -44,6 +45,10 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.0.10 =
+* Keeps two recent Seen cards visible when a reload would otherwise show an empty feed.
+* Continues loading unseen pages behind that stable preview without removing the preview mid-session.
 
 = 1.0.9 =
 * Shows an immediate loading state while all-Seen archive pages are skipped, removing unexplained blank-feed waits.

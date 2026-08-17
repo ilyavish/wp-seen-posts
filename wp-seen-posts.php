@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks posts viewed in archive feeds, hides previously seen posts on later visits, and integrates with progressive infinite scrolling.
- * Version:           1.0.9
+ * Version:           1.0.10
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.0.9';
+const VERSION = '1.0.10';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
@@ -92,15 +92,16 @@ function enqueue_assets(): void {
 	);
 
 	$config = array(
-		'theme'         => $theme_id,
-		'selectors'     => Settings::get_selectors(),
-		'storageKey'    => 'wp_seen_posts_v1',
-		'threshold'     => 0.5,
-		'dwellTime'     => 1000,
-		'hasMorePages'  => $has_more_pages,
-		'maxEntries'    => max( 1, $max_entries ),
-		'retentionDays' => max( 1, $retention_days ),
-		'i18n'          => array(
+		'theme'              => $theme_id,
+		'selectors'          => Settings::get_selectors(),
+		'storageKey'         => 'wp_seen_posts_v1',
+		'threshold'          => 0.5,
+		'dwellTime'          => 1000,
+		'reloadPreviewCount' => 2,
+		'hasMorePages'       => $has_more_pages,
+		'maxEntries'         => max( 1, $max_entries ),
+		'retentionDays'      => max( 1, $retention_days ),
+		'i18n'               => array(
 			'showSeen'       => __( 'Show seen', 'wp-seen-posts' ),
 			'hideSeen'       => __( 'Hide seen', 'wp-seen-posts' ),
 			'seen'           => __( 'Seen', 'wp-seen-posts' ),
