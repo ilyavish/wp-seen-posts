@@ -57,27 +57,43 @@
 		if (!adapter) return;
 
 		var feed = adapter.feedContainer;
+		var requiredVisibility = visibilityThreshold();
 		var history = prune(readHistory());
 		var historyAtLoad = new Set(Object.keys(history));
+		var historyEntryCount = historyAtLoad.size;
 		var sessionSeen = new Set();
 		var cards = new Map();
 		var timers = new Map();
+		var seenCardCount = 0;
+		var hiddenCardCount = 0;
 		var showSeen = false;
 		var hideSessionSeen = false;
 		var feedExhausted = config.hasMorePages === false;
 		var writesSincePrune = 0;
+		var historyWriteTimer = null;
+		var historyDirty = false;
 
-		function writeHistory(forcePrune) {
+		function flushHistory(forcePrune) {
+			if (historyWriteTimer) window.clearTimeout(historyWriteTimer);
+			historyWriteTimer = null;
+			if (!forcePrune && !historyDirty) return;
 			try {
-				writesSincePrune += 1;
 				if (forcePrune || writesSincePrune >= 25) {
 					history = prune(history);
+					historyEntryCount = Object.keys(history).length;
 					writesSincePrune = 0;
 				}
 				window.localStorage.setItem(config.storageKey || 'wp_seen_posts_v1', JSON.stringify(history));
 			} catch (error) {}
+			historyDirty = false;
 		}
-		writeHistory(true);
+
+		function scheduleHistoryWrite() {
+			historyDirty = true;
+			writesSincePrune += 1;
+			if (!historyWriteTimer) historyWriteTimer = window.setTimeout(function () { flushHistory(false); }, 0);
+		}
+		flushHistory(true);
 
 		var controls = document.createElement('div');
 		controls.className = 'wp-seen-posts-controls';
@@ -100,12 +116,6 @@
 		empty.textContent = config.i18n.caughtUp;
 		feed.insertAdjacentElement('beforebegin', empty);
 
-		function seenCount() {
-			var count = 0;
-			cards.forEach(function (card) { if (card.classList.contains('wp-seen-posts-is-seen')) count += 1; });
-			return count;
-		}
-
 		function shouldHide(id) {
 			if (showSeen) return false;
 			return historyAtLoad.has(id) || (hideSessionSeen && sessionSeen.has(id));
@@ -113,18 +123,19 @@
 
 		function applyCardVisibility(card, id) {
 			var hidden = card.classList.contains('wp-seen-posts-is-seen') && shouldHide(id);
+			var wasHidden = card.classList.contains('wp-seen-posts-is-hidden');
+			if (hidden !== wasHidden) hiddenCardCount += hidden ? 1 : -1;
 			card.classList.toggle('wp-seen-posts-is-hidden', hidden);
 			card.setAttribute('aria-hidden', hidden ? 'true' : 'false');
 		}
 
 		function updateUi() {
-			var count = seenCount();
+			var count = seenCardCount;
 			toggle.textContent = showSeen ? config.i18n.hideSeen : config.i18n.showSeen + ' (' + count + ')';
 			toggle.setAttribute('aria-expanded', showSeen ? 'true' : 'false');
 			toggle.disabled = count === 0;
-			reset.hidden = Object.keys(history).length === 0;
-			var visible = 0;
-			cards.forEach(function (card) { if (!card.classList.contains('wp-seen-posts-is-hidden')) visible += 1; });
+			reset.hidden = historyEntryCount === 0;
+			var visible = cards.size - hiddenCardCount;
 			empty.hidden = !(feedExhausted && cards.size > 0 && visible === 0 && count === cards.size);
 		}
 
@@ -153,32 +164,37 @@
 			requestMoreIfAllHidden();
 		}
 
-		function setSeen(card, id, fromHistory) {
+		function ensureBadge(card) {
+			if (card.querySelector(':scope > .wp-seen-posts-badge')) return;
+			var cardPosition = window.getComputedStyle(card).position;
+			if (!cardPosition || cardPosition === 'static') card.classList.add('wp-seen-posts-position-context');
+			var badge = document.createElement('span');
+			badge.className = 'wp-seen-posts-badge';
+			badge.textContent = config.i18n.seen;
+			card.insertAdjacentElement('afterbegin', badge);
+		}
+
+		function setSeen(card, id, fromHistory, deferUi) {
+			if (card.dataset.seenPostState !== 'seen') seenCardCount += 1;
 			card.classList.add('wp-seen-posts-is-seen');
 			card.dataset.seenPostState = 'seen';
-			if (!card.querySelector(':scope > .wp-seen-posts-badge')) {
-				var cardPosition = window.getComputedStyle(card).position;
-				if (!cardPosition || cardPosition === 'static') card.classList.add('wp-seen-posts-position-context');
-				var badge = document.createElement('span');
-				badge.className = 'wp-seen-posts-badge';
-				badge.textContent = config.i18n.seen;
-				card.insertAdjacentElement('afterbegin', badge);
-			}
+			if (!fromHistory) ensureBadge(card);
 			if (!fromHistory) {
+				if (!Object.prototype.hasOwnProperty.call(history, id)) historyEntryCount += 1;
 				history[id] = Math.floor(Date.now() / 1000);
 				sessionSeen.add(id);
-				writeHistory(false);
+				scheduleHistoryWrite();
 			}
 			observer.unobserve(card);
 			applyCardVisibility(card, id);
-			updateUi();
+			if (!deferUi) updateUi();
 		}
 
 		var observer = new IntersectionObserver(function (entries) {
 			entries.forEach(function (entry) {
 				var card = entry.target;
 				var id = card.dataset.seenPostId;
-				if (hasEnoughVisibility(entry, visibilityThreshold()) && document.visibilityState === 'visible') {
+				if (hasEnoughVisibility(entry, requiredVisibility) && document.visibilityState === 'visible') {
 					if (!timers.has(card)) {
 						timers.set(card, window.setTimeout(function () {
 							timers.delete(card);
@@ -190,10 +206,11 @@
 					timers.delete(card);
 				}
 			});
-		}, { threshold: observerThresholds(visibilityThreshold()) });
+		}, { threshold: observerThresholds(requiredVisibility) });
 
 		document.addEventListener('visibilitychange', function () {
 			if (document.visibilityState !== 'visible') {
+				flushHistory(false);
 				timers.forEach(function (timer) { window.clearTimeout(timer); });
 				timers.clear();
 				return;
@@ -206,6 +223,7 @@
 				}
 			});
 		});
+		window.addEventListener('pagehide', function () { flushHistory(false); });
 
 		function initializePosts(posts) {
 			Array.prototype.forEach.call(posts || [], function (card) {
@@ -215,7 +233,7 @@
 				card.dataset.seenPostInitialized = 'true';
 				card.dataset.seenPostId = id;
 				cards.set(id, card);
-				if (historyAtLoad.has(id)) setSeen(card, id, true);
+				if (historyAtLoad.has(id)) setSeen(card, id, true, true);
 				else {
 					card.dataset.seenPostState = 'unseen';
 					observer.observe(card);
@@ -227,7 +245,10 @@
 		function setShowSeen(value) {
 			showSeen = value;
 			if (!value) hideSessionSeen = true;
-			cards.forEach(function (card, id) { applyCardVisibility(card, id); });
+			cards.forEach(function (card, id) {
+				if (value && card.dataset.seenPostState === 'seen') ensureBadge(card);
+				applyCardVisibility(card, id);
+			});
 			updateUi();
 			if (!value) window.setTimeout(requestMoreIfAllHidden, 0);
 		}
@@ -235,10 +256,16 @@
 		toggle.addEventListener('click', function () { setShowSeen(!showSeen); });
 		reset.addEventListener('click', function () {
 			if (!window.confirm(config.i18n.confirmReset)) return;
+			if (historyWriteTimer) window.clearTimeout(historyWriteTimer);
+			historyWriteTimer = null;
+			historyDirty = false;
 			try { window.localStorage.removeItem(config.storageKey || 'wp_seen_posts_v1'); } catch (error) {}
 			history = {};
+			historyEntryCount = 0;
 			historyAtLoad.clear();
 			sessionSeen.clear();
+			seenCardCount = 0;
+			hiddenCardCount = 0;
 			showSeen = false;
 			hideSessionSeen = false;
 			cards.forEach(function (card) {

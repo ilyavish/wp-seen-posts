@@ -17,10 +17,14 @@ function strings() {
 }
 
 async function boot(history = {}, options = {}) {
+	const postCount = options.postCount ?? 2;
+	const postMarkup = Array.from({ length: postCount }, (_, index) => {
+		const id = index + 1;
+		return `<li id="prologue-${id}" class="post post-${id}">Post ${id}</li>`;
+	}).join('');
 	const dom = new JSDOM(`<!doctype html><html><body><main id="main">
 		<ul id="postlist">
-			<li id="prologue-1" class="post post-1">Old</li>
-			<li id="prologue-2" class="post post-2">New</li>
+			${postMarkup}
 		</ul>
 		<div class="wp-pfis-controls"><button class="wp-pfis-load-more">Load more</button><div class="wp-pfis-sentinel"></div></div>
 	</main></body></html>`, { url: 'https://example.com/', runScripts: 'outside-only' });
@@ -51,11 +55,55 @@ async function boot(history = {}, options = {}) {
 		maxEntries: 3000, retentionDays: 365, i18n: strings()
 	};
 	window.confirm = () => true;
+	if (options.beforeEval) options.beforeEval(window);
 	window.eval(engine);
 	window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
 	await new Promise((resolve) => window.setTimeout(resolve, 0));
 	return { dom, window, observer: observers[0], loadMoreClicks: () => loadMoreClicks };
 }
+
+test('initializes a large Seen history without calculating hidden badge layouts', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 500 }, (_, index) => [String(index + 1), now]));
+	let computedStyleCalls = 0;
+	const { window } = await boot(history, {
+		postCount: 500,
+		beforeEval(currentWindow) {
+			const getComputedStyle = currentWindow.getComputedStyle.bind(currentWindow);
+			currentWindow.getComputedStyle = (...args) => {
+				computedStyleCalls += 1;
+				return getComputedStyle(...args);
+			};
+		}
+	});
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 500);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
+	assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent, 'Show seen (500)');
+	assert.equal(computedStyleCalls, 0);
+
+	window.document.querySelector('.wp-seen-posts-toggle').click();
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 500);
+	assert.equal(computedStyleCalls, 500);
+});
+
+test('coalesces simultaneous Seen history writes', async () => {
+	let historyWrites = 0;
+	const { window, observer } = await boot({}, {
+		postCount: 3,
+		beforeEval(currentWindow) {
+			const setItem = currentWindow.Storage.prototype.setItem;
+			currentWindow.Storage.prototype.setItem = function (...args) {
+				historyWrites += 1;
+				return setItem.apply(this, args);
+			};
+		}
+	});
+	assert.equal(historyWrites, 1);
+	window.document.querySelectorAll('#postlist > li').forEach((card) => observer.trigger(card, 0.5));
+	await new Promise((resolve) => window.setTimeout(resolve, 15));
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-seen').length, 3);
+	assert.equal(historyWrites, 2);
+});
 
 test('keeps a newly Seen card visible after it is scrolled past and reveals prior history on request', async () => {
 	const now = Math.floor(Date.now() / 1000);

@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.6
+Stable tag: 1.0.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -44,6 +44,10 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.0.7 =
+* Speeds up large feeds with constant-time Seen/hidden counters and batched initial UI updates.
+* Coalesces history persistence and defers badges for already-hidden posts to reduce synchronous work.
 
 = 1.0.6 =
 * Reduces the continuous Seen dwell time from 1,500 to 1,000 milliseconds.
