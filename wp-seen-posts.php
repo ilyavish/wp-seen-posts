@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks posts viewed in archive feeds, hides previously seen posts on later visits, and integrates with progressive infinite scrolling.
- * Version:           1.0.1
+ * Version:           1.0.2
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
@@ -41,6 +41,8 @@ function is_supported_view(): bool {
  * Enqueue the dependency-free feed enhancement.
  */
 function enqueue_assets(): void {
+	global $wp_query;
+
 	if ( ! is_supported_view() ) {
 		return;
 	}
@@ -58,6 +60,8 @@ function enqueue_assets(): void {
 
 	$max_entries    = defined( 'WP_SEEN_POSTS_MAX_ENTRIES' ) ? (int) WP_SEEN_POSTS_MAX_ENTRIES : 3000;
 	$retention_days = defined( 'WP_SEEN_POSTS_RETENTION_DAYS' ) ? (int) WP_SEEN_POSTS_RETENTION_DAYS : 365;
+	$current_page   = max( 1, (int) get_query_var( 'paged' ) );
+	$has_more_pages = isset( $wp_query->max_num_pages ) && $current_page < (int) $wp_query->max_num_pages;
 
 	/** Filters the maximum number of locally stored post IDs. */
 	$max_entries = (int) apply_filters( 'wp_seen_posts_max_entries', $max_entries );
@@ -95,6 +99,7 @@ function enqueue_assets(): void {
 		'dwellTime'     => 750,
 		'collapseDelay' => 120,
 		'recentBuffer'  => 2,
+		'hasMorePages'  => $has_more_pages,
 		'maxEntries'    => max( 1, $max_entries ),
 		'retentionDays' => max( 1, $retention_days ),
 		'i18n'          => array(
@@ -104,8 +109,6 @@ function enqueue_assets(): void {
 			'reset'          => __( 'Reset seen history', 'wp-seen-posts' ),
 			'confirmReset'   => __( 'Reset your Seen history and mark the loaded posts as unseen?', 'wp-seen-posts' ),
 			'caughtUp'       => __( "You're all caught up.", 'wp-seen-posts' ),
-			'caughtUpDetail' => __( "You've seen all posts currently loaded.", 'wp-seen-posts' ),
-			'showSeenPosts'  => __( 'Show seen posts', 'wp-seen-posts' ),
 		),
 	);
 

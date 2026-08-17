@@ -74,6 +74,7 @@
 		var collapseTimer = null;
 		var showSeen = false;
 		var hideSessionSeen = false;
+		var feedExhausted = config.hasMorePages === false;
 		var writesSincePrune = 0;
 
 		function writeHistory(forcePrune) {
@@ -101,19 +102,12 @@
 		controls.appendChild(reset);
 		feed.insertAdjacentElement('beforebegin', controls);
 
-		var empty = document.createElement('div');
+		var empty = document.createElement('p');
 		empty.className = 'wp-seen-posts-empty';
 		empty.hidden = true;
-		var emptyTitle = document.createElement('strong');
-		emptyTitle.textContent = config.i18n.caughtUp;
-		var emptyDetail = document.createElement('span');
-		emptyDetail.textContent = config.i18n.caughtUpDetail;
-		var emptyShow = document.createElement('button');
-		emptyShow.type = 'button';
-		emptyShow.textContent = config.i18n.showSeenPosts;
-		empty.appendChild(emptyTitle);
-		empty.appendChild(emptyDetail);
-		empty.appendChild(emptyShow);
+		empty.setAttribute('role', 'status');
+		empty.setAttribute('aria-live', 'polite');
+		empty.textContent = config.i18n.caughtUp;
 		feed.insertAdjacentElement('beforebegin', empty);
 
 		function seenCount() {
@@ -141,7 +135,15 @@
 			reset.hidden = Object.keys(history).length === 0;
 			var visible = 0;
 			cards.forEach(function (card) { if (!card.classList.contains('wp-seen-posts-is-hidden')) visible += 1; });
-			empty.hidden = !(cards.size > 0 && visible === 0 && count === cards.size);
+			empty.hidden = !(feedExhausted && cards.size > 0 && visible === 0 && count === cards.size);
+		}
+
+		function refreshFeedExhaustion() {
+			var infiniteControls = document.querySelector('.wp-pfis-controls');
+			if (infiniteControls) {
+				feedExhausted = !infiniteControls.querySelector('.wp-pfis-load-more') && !infiniteControls.querySelector('.wp-pfis-sentinel');
+			}
+			updateUi();
 		}
 
 		function setSeen(card, id, fromHistory) {
@@ -274,7 +276,6 @@
 		}
 
 		toggle.addEventListener('click', function () { setShowSeen(!showSeen); });
-		emptyShow.addEventListener('click', function () { setShowSeen(true); });
 		reset.addEventListener('click', function () {
 			if (!window.confirm(config.i18n.confirmReset)) return;
 			if (collapseTimer) window.clearTimeout(collapseTimer);
@@ -308,6 +309,13 @@
 				var loadMore = document.querySelector('.wp-pfis-load-more:not([aria-disabled="true"])');
 				if (loadMore) window.setTimeout(function () { loadMore.click(); }, 0);
 			}
+			window.setTimeout(refreshFeedExhaustion, 0);
+		});
+
+		document.addEventListener('wpFeedInfiniteScrollFinished', function (event) {
+			if (event.detail && event.detail.container && event.detail.container !== feed) return;
+			feedExhausted = true;
+			updateUi();
 		});
 
 		initializePosts(adapter.posts);

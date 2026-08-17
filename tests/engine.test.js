@@ -12,17 +12,17 @@ const engine = fs.readFileSync(path.join(__dirname, '../assets/js/seen-posts.js'
 function strings() {
 	return {
 		showSeen: 'Show seen', hideSeen: 'Hide seen', seen: 'Seen', reset: 'Reset seen history',
-		confirmReset: 'Reset?', caughtUp: "You're all caught up.", caughtUpDetail: 'All loaded.', showSeenPosts: 'Show seen posts'
+		confirmReset: 'Reset?', caughtUp: "You're all caught up."
 	};
 }
 
-async function boot(history = {}) {
+async function boot(history = {}, options = {}) {
 	const dom = new JSDOM(`<!doctype html><html><body><main id="main">
 		<ul id="postlist">
 			<li id="prologue-1" class="post post-1">Old</li>
 			<li id="prologue-2" class="post post-2">New</li>
 		</ul>
-		<button class="wp-pfis-load-more">Load more</button>
+		<div class="wp-pfis-controls"><button class="wp-pfis-load-more">Load more</button><div class="wp-pfis-sentinel"></div></div>
 	</main></body></html>`, { url: 'https://example.com/', runScripts: 'outside-only' });
 	const { window } = dom;
 	Object.defineProperty(window.document, 'visibilityState', { value: 'visible', configurable: true });
@@ -45,7 +45,8 @@ async function boot(history = {}) {
 	window.WPSeenPostsAdapters = adapters;
 	window.wpSeenPostsConfig = {
 		theme: 'p2', selectors: {}, storageKey: 'wp_seen_posts_v1', threshold: 0.5,
-		dwellTime: 5, collapseDelay: 1, recentBuffer: 2, maxEntries: 3000, retentionDays: 365, i18n: strings()
+		dwellTime: 5, collapseDelay: 1, recentBuffer: 2, hasMorePages: options.hasMorePages ?? false,
+		maxEntries: 3000, retentionDays: 365, i18n: strings()
 	};
 	window.confirm = () => true;
 	window.eval(engine);
@@ -119,6 +120,26 @@ test('allows half a viewport to qualify an exceptionally tall post', async () =>
 	observer.trigger(tallCard, 0.3, 100, 2000, window.innerHeight * 0.5);
 	await new Promise((resolve) => window.setTimeout(resolve, 10));
 	assert.equal(tallCard.dataset.seenPostState, 'seen');
+});
+
+test('shows a compact caught-up status only after the feed is truly exhausted', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const { window } = await boot({ 1: now, 2: now, 3: now }, { hasMorePages: true });
+	const empty = window.document.querySelector('.wp-seen-posts-empty');
+	assert.equal(empty.hidden, true);
+	assert.equal(empty.querySelector('button'), null);
+
+	const feed = window.document.querySelector('#postlist');
+	const card = window.document.createElement('li');
+	card.id = 'prologue-3';
+	card.className = 'post post-3';
+	feed.appendChild(card);
+	window.document.querySelector('.wp-pfis-load-more').remove();
+	window.document.querySelector('.wp-pfis-sentinel').remove();
+	window.document.dispatchEvent(new window.CustomEvent('wpFeedPostsAdded', { detail: { container: feed, posts: [card] } }));
+	await new Promise((resolve) => window.setTimeout(resolve, 5));
+	assert.equal(empty.hidden, false);
+	assert.equal(empty.textContent, "You're all caught up.");
 });
 
 test('reset clears only Seen history and re-observes loaded cards', async () => {
