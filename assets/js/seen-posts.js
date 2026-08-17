@@ -183,7 +183,7 @@
 						timers.set(card, window.setTimeout(function () {
 							timers.delete(card);
 							if (document.visibilityState === 'visible' && card.dataset.seenPostState === 'unseen') setSeen(card, id, false);
-						}, safeNumber(config.dwellTime, 1500)));
+						}, safeNumber(config.dwellTime, 1000)));
 					}
 				} else if (timers.has(card)) {
 					window.clearTimeout(timers.get(card));

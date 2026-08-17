@@ -4,7 +4,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 
 ## Behavior
 
-- A card becomes Seen after at least 50% is visible for 1,500 ms while the tab is visible.
+- A card becomes Seen after at least 50% is visible for 1,000 ms while the tab is visible.
 - For a post taller than the viewport, half of the viewport qualifies so long posts remain usable on phones and tablets.
 - A post that becomes Seen stays visible for the rest of the current page session, preventing scroll-time layout shifts.
 - A compact caught-up status appears only after pagination is genuinely exhausted; the toolbar remains the single reveal control.

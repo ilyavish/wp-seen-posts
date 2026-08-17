@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.5
+Stable tag: 1.0.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,7 +14,7 @@ Tracks posts viewed in archive feeds and hides previously seen posts on later vi
 
 WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds without changing server queries or page caching.
 
-* Marks a post Seen after 50% remains visible for 1,500 milliseconds.
+* Marks a post Seen after 50% remains visible for 1,000 milliseconds.
 * Adapts the visibility measurement for posts taller than the viewport.
 * Keeps newly Seen posts visible for the rest of the current page session to prevent scroll-time layout shifts.
 * Shows one compact caught-up status only when no more archive pages remain.
@@ -44,6 +44,9 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.0.6 =
+* Reduces the continuous Seen dwell time from 1,500 to 1,000 milliseconds.
 
 = 1.0.5 =
 * Removes live post collapsing to eliminate desktop glitches and mobile stumbles while scrolling.
