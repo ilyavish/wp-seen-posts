@@ -40,6 +40,7 @@
 		var history = prune(readHistory());
 		var historyAtLoad = new Set(Object.keys(history));
 		var sessionSeen = new Set();
+		var autoHiddenSession = new Set();
 		var cards = new Map();
 		var timers = new Map();
 		var showSeen = false;
@@ -94,7 +95,7 @@
 
 		function shouldHide(id) {
 			if (showSeen) return false;
-			return historyAtLoad.has(id) || (hideSessionSeen && sessionSeen.has(id));
+			return historyAtLoad.has(id) || autoHiddenSession.has(id) || (hideSessionSeen && sessionSeen.has(id));
 		}
 
 		function applyCardVisibility(card, id) {
@@ -127,7 +128,6 @@
 				sessionSeen.add(id);
 				writeHistory(false);
 			}
-			observer.unobserve(card);
 			applyCardVisibility(card, id);
 			updateUi();
 		}
@@ -136,6 +136,15 @@
 			entries.forEach(function (entry) {
 				var card = entry.target;
 				var id = card.dataset.seenPostId;
+				if (card.dataset.seenPostState === 'seen') {
+					if (sessionSeen.has(id) && !entry.isIntersecting && entry.boundingClientRect.bottom <= 0) {
+						autoHiddenSession.add(id);
+						observer.unobserve(card);
+						applyCardVisibility(card, id);
+						updateUi();
+					}
+					return;
+				}
 				if (entry.isIntersecting && entry.intersectionRatio >= safeNumber(config.threshold, 0.5) && document.visibilityState === 'visible') {
 					if (!timers.has(card)) {
 						timers.set(card, window.setTimeout(function () {
@@ -148,7 +157,7 @@
 					timers.delete(card);
 				}
 			});
-		}, { threshold: [safeNumber(config.threshold, 0.5)] });
+		}, { threshold: [0, safeNumber(config.threshold, 0.5)] });
 
 		document.addEventListener('visibilitychange', function () {
 			if (document.visibilityState !== 'visible') {
@@ -197,6 +206,7 @@
 			history = {};
 			historyAtLoad.clear();
 			sessionSeen.clear();
+			autoHiddenSession.clear();
 			showSeen = false;
 			hideSessionSeen = false;
 			cards.forEach(function (card) {

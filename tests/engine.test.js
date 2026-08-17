@@ -32,7 +32,9 @@ async function boot(history = {}) {
 		constructor(callback) { this.callback = callback; this.observed = new Set(); observers.push(this); }
 		observe(element) { this.observed.add(element); }
 		unobserve(element) { this.observed.delete(element); }
-		trigger(element, ratio) { this.callback([{ target: element, isIntersecting: ratio > 0, intersectionRatio: ratio }]); }
+		trigger(element, ratio, bottom = 100) {
+			this.callback([{ target: element, isIntersecting: ratio > 0, intersectionRatio: ratio, boundingClientRect: { bottom } }]);
+		}
 	};
 	window.WPSeenPostsAdapters = adapters;
 	window.wpSeenPostsConfig = {
@@ -46,7 +48,7 @@ async function boot(history = {}) {
 	return { dom, window, observer: observers[0] };
 }
 
-test('hides history from page load but keeps a newly Seen card visible', async () => {
+test('keeps a newly Seen card visible until it is scrolled past, then reveals it on request', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const { window, observer } = await boot({ 1: now });
 	const oldCard = window.document.querySelector('#prologue-1');
@@ -60,6 +62,11 @@ test('hides history from page load but keeps a newly Seen card visible', async (
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
 	assert.equal(JSON.parse(window.localStorage.getItem('wp_seen_posts_v1'))['2'] > 0, true);
 	assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent, 'Show seen (2)');
+
+	observer.trigger(newCard, 0, -1);
+	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), true);
+	window.document.querySelector('.wp-seen-posts-toggle').click();
+	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
 });
 
 test('initializes only supplied infinite-scroll posts and crosses an all-hidden page', async () => {
