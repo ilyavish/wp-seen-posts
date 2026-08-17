@@ -39,7 +39,10 @@ async function bootSingle(history = {}, options = {}) {
 		retentionDays: 365,
 		badges: [
 			{ key: 'beer', threshold: 5, label: 'Beer badge', description: 'You earned the Beer badge for seeing 5 posts.', alt: 'Cute beer badge', url: 'https://example.com/beer.png' },
-			{ key: 'vodka', threshold: 10, label: 'Vodka badge', description: 'You earned the Vodka badge for seeing 10 posts.', alt: 'Vodka bottle badge', url: 'https://example.com/vodka.png' }
+			{ key: 'vodka', threshold: 10, label: 'Vodka badge', description: 'You earned the Vodka badge for seeing 10 posts.', alt: 'Vodka bottle badge', url: 'https://example.com/vodka.png' },
+			{ key: 'tracksuit', threshold: 20, label: 'Tracksuit badge', description: 'You earned the Tracksuit badge for seeing 20 posts.', alt: 'Black tracksuit badge', url: 'https://example.com/adidas.png' },
+			{ key: 'gopnik', threshold: 50, label: 'Gopnik badge', description: 'You earned the Gopnik badge for seeing 50 posts.', alt: 'Gopnik character badge', url: 'https://example.com/gopnik.png' },
+			{ key: 'bmw', threshold: 100, label: 'Black BMW badge', description: 'You earned the Black BMW badge for seeing 100 posts.', alt: 'Black BMW badge', url: 'https://example.com/bmw.png' }
 		],
 		i18n: {
 			seen: 'Seen', achievements: 'Your badges', badgeHint: 'Tap a badge to see why you earned it.',
@@ -142,4 +145,16 @@ test('shows earned badges on a single post and explains a newly unlocked milesto
 	assert.equal(status.querySelector('.wp-seen-posts-achievement-tooltip').textContent, 'You earned the Beer badge for seeing 5 posts.');
 	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast').textContent.includes('Achievement unlocked!'), true);
 	assert.equal(recordedDetail().unlocked, 'beer');
+});
+
+test('unlocks and animates the Black BMW badge on a 100th direct post', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 99 }, (_, index) => [String(index + 100), now]));
+	const { window, recordedDetail } = await bootSingle(history);
+	await new Promise((resolve) => window.setTimeout(resolve, 12));
+	const bmw = window.document.querySelector('.wp-seen-posts-achievement[data-badge-key="bmw"]');
+	assert.equal(recordedDetail().unlocked, 'bmw');
+	assert.equal(bmw.classList.contains('wp-seen-posts-achievement-unlocked'), true);
+	assert.equal(bmw.querySelector('img').src, 'https://example.com/bmw.png');
+	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast').textContent.includes('Black BMW badge'), true);
 });

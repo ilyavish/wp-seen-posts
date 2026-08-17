@@ -24,7 +24,8 @@ function badges() {
 		{ key: 'beer', threshold: 5, label: 'Beer badge', description: 'You earned the Beer badge for seeing 5 posts.', alt: 'Cute beer badge', url: 'https://example.com/badges/beer.png' },
 		{ key: 'vodka', threshold: 10, label: 'Vodka badge', description: 'You earned the Vodka badge for seeing 10 posts.', alt: 'Vodka bottle badge', url: 'https://example.com/badges/vodka.png' },
 		{ key: 'tracksuit', threshold: 20, label: 'Tracksuit badge', description: 'You earned the Tracksuit badge for seeing 20 posts.', alt: 'Black tracksuit badge', url: 'https://example.com/badges/adidas.png' },
-		{ key: 'gopnik', threshold: 50, label: 'Gopnik badge', description: 'You earned the Gopnik badge for seeing 50 posts.', alt: 'Gopnik character badge', url: 'https://example.com/badges/gopnik.png' }
+		{ key: 'gopnik', threshold: 50, label: 'Gopnik badge', description: 'You earned the Gopnik badge for seeing 50 posts.', alt: 'Gopnik character badge', url: 'https://example.com/badges/gopnik.png' },
+		{ key: 'bmw', threshold: 100, label: 'Black BMW badge', description: 'You earned the Black BMW badge for seeing 100 posts.', alt: 'Black BMW badge', url: 'https://example.com/badges/bmw.png' }
 	];
 }
 
@@ -280,22 +281,36 @@ test('unlocks the beer milestone beside Seen with a brief, explained achievement
 	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast').textContent.includes('Achievement unlocked!'), true);
 });
 
-test('accumulates all earned milestones and keeps Seen beside the highest badge on cards', async () => {
+test('accumulates earned milestones and keeps Seen beside the highest badge on cards', async () => {
 	const now = Math.floor(Date.now() / 1000);
-	const history = Object.fromEntries(Array.from({ length: 50 }, (_, index) => [String(index + 1), now]));
+	const history = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [String(index + 1), now]));
 	const { window } = await boot(history);
 	const achievements = window.document.querySelector('.wp-seen-posts-achievements');
-	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer', 'vodka', 'tracksuit', 'gopnik']);
-	assert.equal(achievements.querySelectorAll('img').length, 4);
+	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer', 'vodka', 'tracksuit', 'gopnik', 'bmw']);
+	assert.equal(achievements.querySelectorAll('img').length, 5);
 	window.document.querySelectorAll('.wp-seen-posts-badge').forEach((badge) => {
 		assert.equal(badge.querySelector('.wp-seen-posts-badge-text').textContent, 'Seen');
-		assert.equal(badge.getAttribute('aria-label'), 'Seen. You earned the Gopnik badge for seeing 50 posts.');
-		assert.equal(badge.querySelector('img').src, 'https://example.com/badges/gopnik.png');
+		assert.equal(badge.getAttribute('aria-label'), 'Seen. You earned the Black BMW badge for seeing 100 posts.');
+		assert.equal(badge.querySelector('img').src, 'https://example.com/badges/bmw.png');
 	});
 	window.document.querySelector('.wp-seen-posts-reset').click();
 	assert.equal(achievements.hidden, true);
 	assert.equal(achievements.querySelector('.wp-seen-posts-achievements-list').children.length, 0);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
+});
+
+test('unlocks the 100-post Black BMW milestone with animation and toast', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 99 }, (_, index) => [String(index + 1), now]));
+	const { window, observer } = await boot(history, { postCount: 100 });
+	const hundredth = window.document.querySelector('#prologue-100');
+	observer.trigger(hundredth, 0.5);
+	await new Promise((resolve) => window.setTimeout(resolve, 10));
+	const bmw = window.document.querySelector('.wp-seen-posts-achievement[data-badge-key="bmw"]');
+	assert.equal(bmw.classList.contains('wp-seen-posts-achievement-unlocked'), true);
+	assert.equal(bmw.querySelector('img').src, 'https://example.com/badges/bmw.png');
+	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast').textContent.includes('Black BMW badge'), true);
+	assert.equal(hundredth.querySelector('.wp-seen-posts-badge img').src, 'https://example.com/badges/bmw.png');
 });
 
 test('initializes only supplied infinite-scroll posts without advancing while visible content remains', async () => {

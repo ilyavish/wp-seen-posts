@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks posts viewed in archive feeds, hides previously seen posts on later visits, and integrates with progressive infinite scrolling.
- * Version:           1.0.17
+ * Version:           1.0.18
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.0.17';
+const VERSION = '1.0.18';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
@@ -67,6 +67,15 @@ function history_limits(): array {
 	);
 }
 
+/** Return a locally bundled, versioned badge URL for long-lived browser caching. */
+function badge_asset_url( string $filename ): string {
+	return add_query_arg(
+		'ver',
+		VERSION,
+		plugins_url( 'assets/images/badges/' . ltrim( $filename, '/' ), __FILE__ )
+	);
+}
+
 /**
  * Return the lightweight local milestone artwork and thresholds.
  *
@@ -80,7 +89,7 @@ function achievement_badges(): array {
 			'label'       => __( 'Beer badge', 'wp-seen-posts' ),
 			'description' => __( 'You earned the Beer badge for seeing 5 posts.', 'wp-seen-posts' ),
 			'alt'         => __( 'Cute beer badge earned after 5 Seen posts', 'wp-seen-posts' ),
-			'url'         => plugins_url( 'assets/images/badges/beer.png', __FILE__ ),
+			'url'         => badge_asset_url( 'beer.png' ),
 		),
 		array(
 			'key'         => 'vodka',
@@ -88,7 +97,7 @@ function achievement_badges(): array {
 			'label'       => __( 'Vodka badge', 'wp-seen-posts' ),
 			'description' => __( 'You earned the Vodka badge for seeing 10 posts.', 'wp-seen-posts' ),
 			'alt'         => __( 'Vodka bottle badge earned after 10 Seen posts', 'wp-seen-posts' ),
-			'url'         => plugins_url( 'assets/images/badges/vodka.png', __FILE__ ),
+			'url'         => badge_asset_url( 'vodka.png' ),
 		),
 		array(
 			'key'         => 'tracksuit',
@@ -96,7 +105,7 @@ function achievement_badges(): array {
 			'label'       => __( 'Tracksuit badge', 'wp-seen-posts' ),
 			'description' => __( 'You earned the Tracksuit badge for seeing 20 posts.', 'wp-seen-posts' ),
 			'alt'         => __( 'Black tracksuit badge earned after 20 Seen posts', 'wp-seen-posts' ),
-			'url'         => plugins_url( 'assets/images/badges/adidas.png', __FILE__ ),
+			'url'         => badge_asset_url( 'adidas.png' ),
 		),
 		array(
 			'key'         => 'gopnik',
@@ -104,7 +113,15 @@ function achievement_badges(): array {
 			'label'       => __( 'Gopnik badge', 'wp-seen-posts' ),
 			'description' => __( 'You earned the Gopnik badge for seeing 50 posts.', 'wp-seen-posts' ),
 			'alt'         => __( 'Gopnik character badge earned after 50 Seen posts', 'wp-seen-posts' ),
-			'url'         => plugins_url( 'assets/images/badges/gopnik.png', __FILE__ ),
+			'url'         => badge_asset_url( 'gopnik.png' ),
+		),
+		array(
+			'key'         => 'bmw',
+			'threshold'   => 100,
+			'label'       => __( 'Black BMW badge', 'wp-seen-posts' ),
+			'description' => __( 'You earned the Black BMW badge for seeing 100 posts.', 'wp-seen-posts' ),
+			'alt'         => __( 'Black BMW badge earned after 100 Seen posts', 'wp-seen-posts' ),
+			'url'         => badge_asset_url( 'bmw.png' ),
 		),
 	);
 }
