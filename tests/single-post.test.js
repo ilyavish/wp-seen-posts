@@ -13,7 +13,8 @@ async function bootSingle(history = {}, options = {}) {
 		<div id="content-7" class="postcontent">
 			<p>Single post</p>
 			<div class="wpulike">Like</div>
-			<div class="jp-post-views-single-meta"><span class="jp-post-views-single-count">0 views</span></div>
+			<div class="stats_counter sd-content"><span class="view-count">0 views</span></div>
+			<div class="wp-block-group subscription-block">Discover more newsletter</div>
 		</div>
 		<div class="respond-wrap">Reply form</div>
 	</li></ul></body></html>`;
@@ -69,11 +70,12 @@ test('records a directly opened single post after a visible dwell', async () => 
 	assert.equal(history['7'] > 0, true);
 	assert.equal(writes(), 1);
 	assert.equal(recordedId(), '7');
-	const meta = window.document.querySelector('.jp-post-views-single-meta');
+	const meta = window.document.querySelector('.stats_counter.sd-content');
 	const status = meta.querySelector(':scope > .wp-seen-posts-single-status');
 	assert.equal(status.textContent, 'Seen');
 	assert.equal(status.classList.contains('wp-seen-posts-single-status-inline'), true);
 	assert.equal(meta.classList.contains('wp-seen-posts-single-meta-host'), true);
+	assert.equal(meta.nextElementSibling.classList.contains('subscription-block'), true);
 	assert.equal(Boolean(status.compareDocumentPosition(window.document.querySelector('.respond-wrap')) & window.Node.DOCUMENT_POSITION_FOLLOWING), true);
 });
 
@@ -112,6 +114,14 @@ test('keeps generic-theme Seen feedback inside post content and before comments'
 	const content = window.document.querySelector('.entry-content');
 	assert.equal(content.querySelector(':scope > .wp-seen-posts-single-status') !== null, true);
 	assert.equal(window.document.querySelector('.comments-area .wp-seen-posts-single-status'), null);
+});
+
+test('supports the alternate JP post-views metadata wrapper', async () => {
+	const { window } = await bootSingle({}, {
+		markup: '<!doctype html><html><body><article id="post-7" class="post"><div class="entry-content"><div class="jp-post-views-single-meta"><span class="jp-post-views-single-count">0 views</span></div></div><section class="comments-area">Comments</section></article></body></html>'
+	});
+	await new Promise((resolve) => window.setTimeout(resolve, 10));
+	assert.equal(window.document.querySelector('.jp-post-views-single-meta > .wp-seen-posts-single-status') !== null, true);
 });
 
 test('shows earned badges on a single post and explains a newly unlocked milestone', async () => {

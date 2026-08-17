@@ -76,7 +76,7 @@
 	function findStatusHost() {
 		var root = findPostRoot();
 		var content = root.querySelector('#content-' + postId + ', .postcontent, .entry-content, .post-content, [itemprop="articleBody"]') || root;
-		var meta = content.querySelector('.jp-post-views-single-meta');
+		var meta = content.querySelector('.jp-post-views-single-meta, .stats_counter.sd-content');
 		if (meta) {
 			meta.classList.add('wp-seen-posts-single-meta-host');
 			return { element: meta, inline: true };

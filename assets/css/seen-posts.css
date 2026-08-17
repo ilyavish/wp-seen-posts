@@ -227,6 +227,9 @@
 
 .wp-seen-posts-single-meta-host {
 	align-items: center !important;
+	display: flex !important;
+	flex-wrap: wrap !important;
+	width: 100%;
 }
 
 .wp-seen-posts-single-status-inline {
