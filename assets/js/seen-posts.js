@@ -63,6 +63,8 @@
 		var autoHiddenSession = new Set();
 		var cards = new Map();
 		var timers = new Map();
+		var pendingCollapse = new Map();
+		var collapseTimer = null;
 		var showSeen = false;
 		var hideSessionSeen = false;
 		var writesSincePrune = 0;
@@ -153,12 +155,44 @@
 			updateUi();
 		}
 
+		function flushCollapses() {
+			collapseTimer = null;
+			if (!pendingCollapse.size) return;
+
+			var anchor = null;
+			var anchorTop = 0;
+			cards.forEach(function (candidate) {
+				if (anchor || pendingCollapse.has(candidate) || candidate.classList.contains('wp-seen-posts-is-hidden')) return;
+				var rect = candidate.getBoundingClientRect();
+				if (rect.bottom > 0 && rect.top < window.innerHeight) {
+					anchor = candidate;
+					anchorTop = rect.top;
+				}
+			});
+
+			pendingCollapse.forEach(function (id, card) {
+				autoHiddenSession.add(id);
+				observer.unobserve(card);
+				applyCardVisibility(card, id);
+			});
+			pendingCollapse.clear();
+			updateUi();
+
+			if (anchor) {
+				var offset = anchor.getBoundingClientRect().top - anchorTop;
+				if (Math.abs(offset) > 0.5) window.scrollBy(0, offset);
+			}
+		}
+
+		function queueCollapse(card, id) {
+			pendingCollapse.set(card, id);
+			if (collapseTimer) window.clearTimeout(collapseTimer);
+			collapseTimer = window.setTimeout(flushCollapses, safeNumber(config.collapseDelay, 120));
+		}
+
 		function collapsePassedCard(card, id) {
 			if (!sessionSeen.has(id) || card.contains(document.activeElement) || card.getBoundingClientRect().bottom > 0) return;
-			autoHiddenSession.add(id);
-			observer.unobserve(card);
-			applyCardVisibility(card, id);
-			updateUi();
+			queueCollapse(card, id);
 		}
 
 		var observer = new IntersectionObserver(function (entries) {
@@ -229,6 +263,9 @@
 		emptyShow.addEventListener('click', function () { setShowSeen(true); });
 		reset.addEventListener('click', function () {
 			if (!window.confirm(config.i18n.confirmReset)) return;
+			if (collapseTimer) window.clearTimeout(collapseTimer);
+			collapseTimer = null;
+			pendingCollapse.clear();
 			try { window.localStorage.removeItem(config.storageKey || 'wp_seen_posts_v1'); } catch (error) {}
 			history = {};
 			historyAtLoad.clear();
@@ -259,6 +296,7 @@
 		});
 
 		initializePosts(adapter.posts);
+		feed.classList.add('wp-seen-posts-feed');
 		document.documentElement.classList.add('wp-seen-posts-active');
 	}
 

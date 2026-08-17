@@ -45,6 +45,10 @@
 	display: none !important;
 }
 
+.wp-seen-posts-feed {
+	overflow-anchor: none;
+}
+
 .wp-seen-posts-badge {
 	background: #f0f0f1;
 	border-radius: 999px;

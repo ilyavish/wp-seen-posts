@@ -45,7 +45,7 @@ async function boot(history = {}) {
 	window.WPSeenPostsAdapters = adapters;
 	window.wpSeenPostsConfig = {
 		theme: 'p2', selectors: {}, storageKey: 'wp_seen_posts_v1', threshold: 0.5,
-		dwellTime: 5, maxEntries: 3000, retentionDays: 365, i18n: strings()
+		dwellTime: 5, collapseDelay: 1, maxEntries: 3000, retentionDays: 365, i18n: strings()
 	};
 	window.confirm = () => true;
 	window.eval(engine);
@@ -75,7 +75,7 @@ test('keeps a newly Seen card visible until it is scrolled past, then reveals it
 	observer.trigger(newCard, 0, -1);
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
 	focusedControl.blur();
-	await new Promise((resolve) => window.setTimeout(resolve, 0));
+	await new Promise((resolve) => window.setTimeout(resolve, 5));
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), true);
 	window.document.querySelector('.wp-seen-posts-toggle').click();
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);

@@ -17,6 +17,7 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Marks a post Seen after 50% remains visible for 750 milliseconds.
 * Adapts the visibility measurement for posts taller than the viewport.
 * Keeps posts visible while they are being read, then collapses them after they leave above the viewport.
+* Batches collapses and preserves the visible reading position to prevent mobile scroll jumps.
 * Hides previously Seen posts on later page loads.
 * Stores anonymous history only in localStorage, with age and size pruning.
 * Supports P2 and P2 Resurrected automatically.
@@ -46,6 +47,7 @@ The supplied `posts` collection is initialized directly; the existing feed is no
 * Made Seen detection more responsive: 50% visibility for 750 milliseconds.
 * Automatically collapses a newly Seen post after the visitor scrolls past it.
 * Improves long-post handling and mobile touch targets.
+* Stabilizes the mobile viewport while Seen posts collapse.
 
 = 1.0.0 =
 * Initial release.
