@@ -7,13 +7,16 @@
 
 .wp-seen-posts-toggle,
 .wp-seen-posts-empty button {
+	align-items: center;
 	appearance: none;
 	background: #f0f0f1;
 	border: 1px solid #8c8f94;
 	border-radius: 3px;
 	color: #1d2327;
 	cursor: pointer;
+	display: inline-flex;
 	font: inherit;
+	min-height: 44px;
 	padding: 0.35rem 0.7rem;
 }
 
@@ -23,13 +26,16 @@
 }
 
 .wp-seen-posts-reset {
+	align-items: center;
 	appearance: none;
 	background: none;
 	border: 0;
 	color: inherit;
 	cursor: pointer;
+	display: inline-flex;
 	font: inherit;
 	font-size: 0.85em;
+	min-height: 44px;
 	opacity: 0.65;
 	padding: 0.35rem 0;
 	text-decoration: underline;
@@ -37,10 +43,6 @@
 
 .wp-seen-posts-is-hidden {
 	display: none !important;
-}
-
-.wp-seen-posts-is-seen:not(.wp-seen-posts-is-hidden) {
-	opacity: 0.78;
 }
 
 .wp-seen-posts-badge {
@@ -71,4 +73,3 @@
 /* P2's feed is a list; these controls intentionally sit immediately above it. */
 #main > .wp-seen-posts-controls,
 #main > .wp-seen-posts-empty { margin-left: 0; margin-right: 0; }
-

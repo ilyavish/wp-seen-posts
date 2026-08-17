@@ -5,6 +5,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 ## Behavior
 
 - A card becomes Seen after at least 50% is visible for 750 ms while the tab is visible.
+- For a post taller than the viewport, half of the viewport qualifies so long posts remain usable on phones and tablets.
 - It stays visible while being read, then collapses after it has fully left above the viewport.
 - On a later page load, previously Seen cards start hidden and can be revealed.
 - Anonymous state is stored as `{ postId: unixTimestamp }` in `wp_seen_posts_v1`.

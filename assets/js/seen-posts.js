@@ -10,6 +10,26 @@
 		return Number.isFinite(value) && value > 0 ? value : fallback;
 	}
 
+	function visibilityThreshold() {
+		return Math.min(1, Math.max(0.05, safeNumber(config.threshold, 0.5)));
+	}
+
+	function observerThresholds(maximum) {
+		var thresholds = [0];
+		var step = 0.05;
+		for (var value = step; value < maximum; value += step) thresholds.push(Number(value.toFixed(2)));
+		thresholds.push(maximum);
+		return thresholds;
+	}
+
+	function hasEnoughVisibility(entry, threshold) {
+		var cardHeight = Math.max(0, entry.boundingClientRect.height || 0);
+		var visibleHeight = Math.max(0, entry.intersectionRect.height || 0);
+		var availableHeight = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
+		var requiredHeight = Math.min(cardHeight, availableHeight) * threshold;
+		return entry.isIntersecting && visibleHeight >= requiredHeight;
+	}
+
 	function readHistory() {
 		try {
 			var parsed = JSON.parse(window.localStorage.getItem(config.storageKey || 'wp_seen_posts_v1') || '{}');
@@ -107,6 +127,7 @@
 		function updateUi() {
 			var count = seenCount();
 			toggle.textContent = showSeen ? config.i18n.hideSeen : config.i18n.showSeen + ' (' + count + ')';
+			toggle.setAttribute('aria-expanded', showSeen ? 'true' : 'false');
 			toggle.disabled = count === 0;
 			reset.hidden = Object.keys(history).length === 0;
 			var visible = 0;
@@ -132,20 +153,23 @@
 			updateUi();
 		}
 
+		function collapsePassedCard(card, id) {
+			if (!sessionSeen.has(id) || card.contains(document.activeElement) || card.getBoundingClientRect().bottom > 0) return;
+			autoHiddenSession.add(id);
+			observer.unobserve(card);
+			applyCardVisibility(card, id);
+			updateUi();
+		}
+
 		var observer = new IntersectionObserver(function (entries) {
 			entries.forEach(function (entry) {
 				var card = entry.target;
 				var id = card.dataset.seenPostId;
 				if (card.dataset.seenPostState === 'seen') {
-					if (sessionSeen.has(id) && !entry.isIntersecting && entry.boundingClientRect.bottom <= 0) {
-						autoHiddenSession.add(id);
-						observer.unobserve(card);
-						applyCardVisibility(card, id);
-						updateUi();
-					}
+					if (!entry.isIntersecting) collapsePassedCard(card, id);
 					return;
 				}
-				if (entry.isIntersecting && entry.intersectionRatio >= safeNumber(config.threshold, 0.5) && document.visibilityState === 'visible') {
+				if (hasEnoughVisibility(entry, visibilityThreshold()) && document.visibilityState === 'visible') {
 					if (!timers.has(card)) {
 						timers.set(card, window.setTimeout(function () {
 							timers.delete(card);
@@ -157,7 +181,7 @@
 					timers.delete(card);
 				}
 			});
-		}, { threshold: [0, safeNumber(config.threshold, 0.5)] });
+		}, { threshold: observerThresholds(visibilityThreshold()) });
 
 		document.addEventListener('visibilitychange', function () {
 			if (document.visibilityState !== 'visible') {
@@ -181,6 +205,9 @@
 				if (!id) return;
 				card.dataset.seenPostInitialized = 'true';
 				card.dataset.seenPostId = id;
+				card.addEventListener('focusout', function () {
+					window.setTimeout(function () { collapsePassedCard(card, id); }, 0);
+				});
 				cards.set(id, card);
 				if (historyAtLoad.has(id)) setSeen(card, id, true);
 				else {

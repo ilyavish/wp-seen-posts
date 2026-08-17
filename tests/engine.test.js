@@ -32,8 +32,14 @@ async function boot(history = {}) {
 		constructor(callback) { this.callback = callback; this.observed = new Set(); observers.push(this); }
 		observe(element) { this.observed.add(element); }
 		unobserve(element) { this.observed.delete(element); }
-		trigger(element, ratio, bottom = 100) {
-			this.callback([{ target: element, isIntersecting: ratio > 0, intersectionRatio: ratio, boundingClientRect: { bottom } }]);
+		trigger(element, ratio, bottom = 100, height = 300, visibleHeight = ratio * height) {
+			this.callback([{
+				target: element,
+				isIntersecting: ratio > 0,
+				intersectionRatio: ratio,
+				boundingClientRect: { bottom, height },
+				intersectionRect: { height: visibleHeight }
+			}]);
 		}
 	};
 	window.WPSeenPostsAdapters = adapters;
@@ -63,7 +69,13 @@ test('keeps a newly Seen card visible until it is scrolled past, then reveals it
 	assert.equal(JSON.parse(window.localStorage.getItem('wp_seen_posts_v1'))['2'] > 0, true);
 	assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent, 'Show seen (2)');
 
+	const focusedControl = window.document.createElement('button');
+	newCard.appendChild(focusedControl);
+	focusedControl.focus();
 	observer.trigger(newCard, 0, -1);
+	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
+	focusedControl.blur();
+	await new Promise((resolve) => window.setTimeout(resolve, 0));
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), true);
 	window.document.querySelector('.wp-seen-posts-toggle').click();
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
@@ -86,6 +98,14 @@ test('initializes only supplied infinite-scroll posts and crosses an all-hidden 
 	assert.equal(added.dataset.seenPostInitialized, 'true');
 	assert.equal(added.classList.contains('wp-seen-posts-is-hidden'), true);
 	assert.equal(clicks, 1);
+});
+
+test('allows half a viewport to qualify an exceptionally tall post', async () => {
+	const { window, observer } = await boot();
+	const tallCard = window.document.querySelector('#prologue-2');
+	observer.trigger(tallCard, 0.3, 100, 2000, window.innerHeight * 0.5);
+	await new Promise((resolve) => window.setTimeout(resolve, 10));
+	assert.equal(tallCard.dataset.seenPostState, 'seen');
 });
 
 test('reset clears only Seen history and re-observes loaded cards', async () => {
