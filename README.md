@@ -15,6 +15,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - If a loaded page contains only previously Seen posts, the companion Load More control is triggered automatically until unseen content or the true end is reached.
 - During an automatic advance with no preview available, a compact “Loading unseen posts…” status appears instead of an unexplained empty feed.
 - If a reload would otherwise contain no visible cards, two recent Seen cards remain as a stable preview while unseen pages load, avoiding both blank waits and live removal.
+- If that background search takes longer than 500 ms, a compact fixed “Finding unseen posts…” status appears without changing the feed height; fast loads never flash it.
 - The small Seen badge is anchored to the bottom-right corner of its post card and keeps the Seen word visible beside the visitor's highest earned badge.
 - At 5, 10, 20, 50, and 100 unique Seen posts, visitors accumulate beer, vodka, barsetka waist bag, gopnik, and Black BMW achievement icons in a light badge shelf aligned opposite the feed buttons.
 - Badge images have descriptive alternative text. Desktop hover/focus and mobile taps show a custom explanation below the badge so P2 and Safari cannot clip it above the feed.

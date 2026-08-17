@@ -212,6 +212,28 @@
 	opacity: 0.75;
 }
 
+.wp-seen-posts-empty-preview-loading {
+	background: #1d2327;
+	border: 0;
+	border-radius: 999px;
+	bottom: calc(0.75rem + env(safe-area-inset-bottom));
+	box-shadow: 0 6px 22px rgba(0, 0, 0, 0.2);
+	color: #fff;
+	cursor: progress;
+	font-size: 0.82rem;
+	left: 50%;
+	margin: 0;
+	max-width: calc(100vw - 1.5rem);
+	opacity: 0.96;
+	overflow: hidden;
+	pointer-events: none;
+	position: fixed;
+	text-overflow: ellipsis;
+	transform: translateX(-50%);
+	white-space: nowrap;
+	z-index: 10000;
+}
+
 .wp-seen-posts-empty[hidden] { display: none; }
 
 .wp-seen-posts-single-status {

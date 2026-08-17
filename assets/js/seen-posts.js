@@ -113,6 +113,9 @@
 		var activeMilestoneKey = '';
 		var milestoneToast = null;
 		var milestoneToastTimer = null;
+		var previewLoadingDelay = safeNumber(config.previewLoadingDelay, 500);
+		var previewLoadingTimer = null;
+		var previewLoadingVisible = false;
 
 		function flushHistory(forcePrune) {
 			if (historyWriteTimer) window.clearTimeout(historyWriteTimer);
@@ -327,6 +330,21 @@
 		}
 		document.addEventListener('click', function () { closeAchievementExplanations(null); });
 
+		function updatePreviewLoading(waiting) {
+			if (!waiting) {
+				if (previewLoadingTimer) window.clearTimeout(previewLoadingTimer);
+				previewLoadingTimer = null;
+				previewLoadingVisible = false;
+				return;
+			}
+			if (previewLoadingVisible || previewLoadingTimer) return;
+			previewLoadingTimer = window.setTimeout(function () {
+				previewLoadingTimer = null;
+				previewLoadingVisible = true;
+				updateUi();
+			}, previewLoadingDelay);
+		}
+
 		function updateUi() {
 			updateAchievements();
 			var count = seenCardCount;
@@ -338,9 +356,15 @@
 			var allHidden = !showSeen && cards.size > 0 && visible === 0 && count === cards.size;
 			var canStillAdvance = !feedExhausted && (infiniteReady || document.readyState !== 'complete');
 			var previewOnly = !showSeen && reloadPreviewIds.size > 0 && count === cards.size;
-			empty.textContent = canStillAdvance ? config.i18n.loadingUnseen : (feedExhausted ? config.i18n.caughtUp : config.i18n.noUnseenPage);
-			empty.classList.toggle('wp-seen-posts-empty-loading', allHidden && canStillAdvance);
-			empty.hidden = !(allHidden || (previewOnly && !canStillAdvance));
+			var waitingWithPreview = previewOnly && canStillAdvance;
+			updatePreviewLoading(waitingWithPreview);
+			var findingWithPreview = waitingWithPreview && previewLoadingVisible;
+			empty.textContent = findingWithPreview
+				? (config.i18n.findingUnseen || 'Finding unseen posts…')
+				: (canStillAdvance ? config.i18n.loadingUnseen : (feedExhausted ? config.i18n.caughtUp : config.i18n.noUnseenPage));
+			empty.classList.toggle('wp-seen-posts-empty-loading', (allHidden && canStillAdvance) || findingWithPreview);
+			empty.classList.toggle('wp-seen-posts-empty-preview-loading', findingWithPreview);
+			empty.hidden = !(allHidden || findingWithPreview || (previewOnly && !canStillAdvance));
 		}
 
 		function refreshFeedExhaustion() {
