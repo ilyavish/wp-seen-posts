@@ -30,26 +30,29 @@
 		return entry.isIntersecting && visibleHeight >= requiredHeight;
 	}
 
-	function readHistory() {
-		try {
-			var parsed = JSON.parse(window.localStorage.getItem(config.storageKey || 'wp_seen_posts_v1') || '{}');
-			if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') return {};
-			var clean = {};
-			Object.keys(parsed).forEach(function (id) {
-				if (/^[1-9]\d*$/.test(id) && Number.isFinite(Number(parsed[id])) && Number(parsed[id]) > 0) clean[id] = Math.floor(Number(parsed[id]));
-			});
-			return clean;
-		} catch (error) { return {}; }
-	}
-
-	function prune(history) {
+	function normalizeHistory(parsed) {
+		if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') return {};
 		var cutoff = Math.floor(Date.now() / 1000) - safeNumber(config.retentionDays, 365) * 86400;
 		var max = Math.floor(safeNumber(config.maxEntries, 3000));
-		var entries = Object.keys(history).filter(function (id) { return history[id] >= cutoff; }).map(function (id) { return [id, history[id]]; });
-		entries.sort(function (a, b) { return b[1] - a[1]; });
+		var entries = [];
+		Object.keys(parsed).forEach(function (id) {
+			var timestamp = Number(parsed[id]);
+			if (/^[1-9]\d*$/.test(id) && Number.isFinite(timestamp) && timestamp >= cutoff) entries.push([id, Math.floor(timestamp)]);
+		});
+		if (entries.length > max) {
+			entries.sort(function (a, b) { return b[1] - a[1]; });
+			entries.length = max;
+		}
 		var clean = {};
-		entries.slice(0, max).forEach(function (entry) { clean[entry[0]] = entry[1]; });
+		entries.forEach(function (entry) { clean[entry[0]] = entry[1]; });
 		return clean;
+	}
+
+	function readHistory(preloaded) {
+		try {
+			var parsed = typeof preloaded === 'undefined' ? JSON.parse(window.localStorage.getItem(config.storageKey || 'wp_seen_posts_v1') || '{}') : preloaded;
+			return normalizeHistory(parsed);
+		} catch (error) { return {}; }
 	}
 
 	function init() {
@@ -63,7 +66,9 @@
 
 		var feed = adapter.feedContainer;
 		var requiredVisibility = visibilityThreshold();
-		var history = prune(readHistory());
+		/* The head bootstrap already parsed storage; reuse it instead of blocking reload with a second parse. */
+		var history = readHistory(earlyHide && earlyHide.history);
+		if (earlyHide) earlyHide.history = null;
 		var historyAtLoad = new Set(Object.keys(history));
 		var historyEntryCount = historyAtLoad.size;
 		var reloadPreviewIds = new Set();
@@ -93,7 +98,7 @@
 			if (!forcePrune && !historyDirty) return;
 			try {
 				if (forcePrune || writesSincePrune >= 25) {
-					history = prune(history);
+					history = normalizeHistory(history);
 					historyEntryCount = Object.keys(history).length;
 					writesSincePrune = 0;
 				}
@@ -107,7 +112,6 @@
 			writesSincePrune += 1;
 			if (!historyWriteTimer) historyWriteTimer = window.setTimeout(function () { flushHistory(false); }, 0);
 		}
-		flushHistory(true);
 
 		var controls = document.createElement('div');
 		controls.className = 'wp-seen-posts-controls';

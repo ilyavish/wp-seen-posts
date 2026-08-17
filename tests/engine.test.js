@@ -68,8 +68,20 @@ async function boot(history = {}, options = {}) {
 test('pre-hides stored cards before the engine takes ownership on reload', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	let hiddenBeforeEngine = false;
+	let historyReads = 0;
+	let historyWrites = 0;
 	const { window } = await boot({ 1: now }, {
 		beforeEval(currentWindow) {
+			const getItem = currentWindow.Storage.prototype.getItem;
+			const setItem = currentWindow.Storage.prototype.setItem;
+			currentWindow.Storage.prototype.getItem = function (...args) {
+				historyReads += 1;
+				return getItem.apply(this, args);
+			};
+			currentWindow.Storage.prototype.setItem = function (...args) {
+				historyWrites += 1;
+				return setItem.apply(this, args);
+			};
 			currentWindow.wpSeenPostsEarlyConfig = { storageKey: 'wp_seen_posts_v1' };
 			currentWindow.eval(earlyHide);
 			hiddenBeforeEngine = currentWindow.document.querySelector('#prologue-1').classList.contains('wp-seen-posts-prehidden');
@@ -79,6 +91,9 @@ test('pre-hides stored cards before the engine takes ownership on reload', async
 	assert.equal(hiddenBeforeEngine, true);
 	assert.equal(oldCard.classList.contains('wp-seen-posts-prehidden'), false);
 	assert.equal(oldCard.classList.contains('wp-seen-posts-is-hidden'), true);
+	assert.equal(historyReads, 1);
+	assert.equal(historyWrites, 0);
+	assert.equal(window.WPSeenPostsEarlyHide.history, null);
 });
 
 test('releases early-hidden cards if the full engine never activates', () => {
@@ -93,6 +108,7 @@ test('releases early-hidden cards if the full engine never activates', () => {
 	assert.equal(card.classList.contains('wp-seen-posts-prehidden'), true);
 	window.dispatchEvent(new window.Event('load'));
 	assert.equal(card.classList.contains('wp-seen-posts-prehidden'), false);
+	assert.equal(window.WPSeenPostsEarlyHide.history, null);
 });
 
 test('initializes a large Seen history without calculating hidden badge layouts', async () => {
@@ -132,11 +148,11 @@ test('coalesces simultaneous Seen history writes', async () => {
 			};
 		}
 	});
-	assert.equal(historyWrites, 1);
+	assert.equal(historyWrites, 0);
 	window.document.querySelectorAll('#postlist > li').forEach((card) => observer.trigger(card, 0.5));
 	await new Promise((resolve) => window.setTimeout(resolve, 15));
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-seen').length, 3);
-	assert.equal(historyWrites, 2);
+	assert.equal(historyWrites, 1);
 });
 
 test('keeps a newly Seen card visible after it is scrolled past and reveals prior history on request', async () => {

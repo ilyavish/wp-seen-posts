@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.10
+Stable tag: 1.0.11
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,6 +45,10 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.0.11 =
+* Reuses the history already parsed by the early reload bootstrap instead of parsing localStorage twice.
+* Removes duplicate pruning, unnecessary sorting, and the synchronous no-change storage rewrite from reloads.
 
 = 1.0.10 =
 * Keeps two recent Seen cards visible when a reload would otherwise show an empty feed.

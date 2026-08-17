@@ -42,9 +42,11 @@
 	scan(document.documentElement);
 
 	window.WPSeenPostsEarlyHide = {
+		history: history,
 		stop: function () { observer.disconnect(); },
 		release: function () {
 			observer.disconnect();
+			this.history = null;
 			document.querySelectorAll('.wp-seen-posts-prehidden').forEach(function (card) {
 				card.classList.remove('wp-seen-posts-prehidden');
 			});

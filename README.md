@@ -8,6 +8,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - For a post taller than the viewport, half of the viewport qualifies so long posts remain usable on phones and tablets.
 - A post that becomes Seen stays visible for the rest of the current page session, preventing scroll-time layout shifts.
 - Seen/hidden totals use constant-time counters, and storage writes are coalesced so large feeds remain responsive.
+- Reloads reuse the early bootstrap's parsed history and perform no synchronous no-change localStorage write.
 - A tiny head bootstrap pre-hides stored Seen cards during parsing, preventing a full-feed flash on reload.
 - A compact caught-up status appears only after pagination is genuinely exhausted; the toolbar remains the single reveal control.
 - If a loaded page contains only previously Seen posts, the companion Load More control is triggered automatically until unseen content or the true end is reached.
