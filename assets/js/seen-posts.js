@@ -55,6 +55,20 @@
 		} catch (error) { return {}; }
 	}
 
+	function mergeHistories(base, additions) {
+		var merged = {};
+		[base, additions].forEach(function (source) {
+			if (!source || Array.isArray(source) || typeof source !== 'object') return;
+			Object.keys(source).forEach(function (id) {
+				var timestamp = Number(source[id]);
+				if (!/^[1-9]\d*$/.test(id) || !Number.isFinite(timestamp)) return;
+				timestamp = Math.floor(timestamp);
+				if (!Object.prototype.hasOwnProperty.call(merged, id) || timestamp > merged[id]) merged[id] = timestamp;
+			});
+		});
+		return merged;
+	}
+
 	function readMilestones() {
 		if (!Array.isArray(config.badges)) return [];
 		return config.badges.map(function (badge) {
@@ -81,6 +95,7 @@
 		}
 
 		var feed = adapter.feedContainer;
+		var storageKey = config.storageKey || 'wp_seen_posts_v1';
 		var requiredVisibility = visibilityThreshold();
 		/* The head bootstrap already parsed storage; reuse it instead of blocking reload with a second parse. */
 		var history = readHistory(earlyHide && earlyHide.history);
@@ -108,6 +123,7 @@
 		var writesSincePrune = 0;
 		var historyWriteTimer = null;
 		var historyDirty = false;
+		var pendingHistory = {};
 		var achievementSignature = '';
 		var achievementsInitialized = false;
 		var activeMilestoneKey = '';
@@ -121,15 +137,35 @@
 			if (historyWriteTimer) window.clearTimeout(historyWriteTimer);
 			historyWriteTimer = null;
 			if (!forcePrune && !historyDirty) return;
+			var previousCount = historyEntryCount;
+			var wroteHistory = false;
 			try {
+				/* Merge only this tab's pending additions into the latest stored value. This
+				 * preserves posts recorded by other tabs without resurrecting a reset. */
+				history = mergeHistories(readHistory(), pendingHistory);
 				if (forcePrune || writesSincePrune >= 25) {
 					history = normalizeHistory(history);
-					historyEntryCount = Object.keys(history).length;
 					writesSincePrune = 0;
 				}
-				window.localStorage.setItem(config.storageKey || 'wp_seen_posts_v1', JSON.stringify(history));
+				historyEntryCount = Object.keys(history).length;
+				window.localStorage.setItem(storageKey, JSON.stringify(history));
+				pendingHistory = {};
+				wroteHistory = true;
 			} catch (error) {}
-			historyDirty = false;
+			historyDirty = !wroteHistory && Object.keys(pendingHistory).length > 0;
+			if (previousCount !== historyEntryCount) updateUi();
+		}
+
+		function syncHistoryFromStorage(storedValue) {
+			var previousCount = historyEntryCount;
+			var storedHistory;
+			if (typeof storedValue === 'string' || storedValue === null) {
+				try { storedHistory = normalizeHistory(JSON.parse(storedValue || '{}')); }
+				catch (error) { storedHistory = {}; }
+			} else storedHistory = readHistory();
+			history = mergeHistories(storedHistory, pendingHistory);
+			historyEntryCount = Object.keys(history).length;
+			if (previousCount !== historyEntryCount) updateUi();
 		}
 
 		function scheduleHistoryWrite() {
@@ -411,7 +447,9 @@
 			card.dataset.seenPostState = 'seen';
 			if (!fromHistory) {
 				if (!Object.prototype.hasOwnProperty.call(history, id)) historyEntryCount += 1;
-				history[id] = Math.floor(Date.now() / 1000);
+				var seenAt = Math.floor(Date.now() / 1000);
+				history[id] = seenAt;
+				pendingHistory[id] = seenAt;
 				sessionSeen.add(id);
 				scheduleHistoryWrite();
 			}
@@ -447,6 +485,7 @@
 				timers.clear();
 				return;
 			}
+			syncHistoryFromStorage();
 			/* Re-observe eligible cards so a dwell period can restart after returning to the tab. */
 			cards.forEach(function (card) {
 				if (card.dataset.seenPostState === 'unseen') {
@@ -454,6 +493,10 @@
 					observer.observe(card);
 				}
 			});
+		});
+		window.addEventListener('storage', function (event) {
+			if (event.key !== storageKey && event.key !== null) return;
+			syncHistoryFromStorage(event.newValue);
 		});
 		window.addEventListener('pagehide', function () { flushHistory(false); });
 
@@ -495,8 +538,9 @@
 			if (historyWriteTimer) window.clearTimeout(historyWriteTimer);
 			historyWriteTimer = null;
 			historyDirty = false;
-			try { window.localStorage.removeItem(config.storageKey || 'wp_seen_posts_v1'); } catch (error) {}
+			try { window.localStorage.removeItem(storageKey); } catch (error) {}
 			history = {};
+			pendingHistory = {};
 			historyEntryCount = 0;
 			historyAtLoad.clear();
 			sessionSeen.clear();

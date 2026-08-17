@@ -10,9 +10,23 @@
 	}
 	if (!history || Array.isArray(history) || typeof history !== 'object') return;
 
-	var historyIds = Object.keys(history);
-	if (!historyIds.length) return;
-	var seenIds = new Set(historyIds.filter(function (id) { return /^[1-9]\d*$/.test(id); }));
+	function safeNumber(value, fallback) {
+		value = Number(value);
+		return Number.isFinite(value) && value > 0 ? value : fallback;
+	}
+
+	var cutoff = Math.floor(Date.now() / 1000) - safeNumber(config.retentionDays, 365) * 86400;
+	var maxEntries = Math.floor(safeNumber(config.maxEntries, 3000));
+	var validEntries = [];
+	Object.keys(history).forEach(function (id) {
+		var timestamp = Number(history[id]);
+		if (/^[1-9]\d*$/.test(id) && Number.isFinite(timestamp) && timestamp >= cutoff) validEntries.push([id, Math.floor(timestamp)]);
+	});
+	if (validEntries.length > maxEntries) {
+		validEntries.sort(function (a, b) { return b[1] - a[1]; });
+		validEntries.length = maxEntries;
+	}
+	var seenIds = new Set(validEntries.map(function (entry) { return entry[0]; }));
 	if (!seenIds.size) return;
 	var previewCount = Math.max(0, Math.floor(Number(config.previewCount) || 0));
 	var previewSelector = typeof config.previewSelector === 'string' ? config.previewSelector : '';

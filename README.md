@@ -7,9 +7,9 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - A card becomes Seen after at least 50% is visible for 1,000 ms while the tab is visible.
 - For a post taller than the viewport, half of the viewport qualifies so long posts remain usable on phones and tablets.
 - A post that becomes Seen stays visible for the rest of the current page session, preventing scroll-time layout shifts.
-- Seen/hidden totals use constant-time counters, and storage writes are coalesced so large feeds remain responsive.
+- Seen/hidden totals use constant-time counters, and storage writes are coalesced and merged with newer tab history so large feeds remain responsive without losing direct-post visits.
 - Reloads reuse the early bootstrap's parsed history and perform no synchronous no-change localStorage write.
-- A tiny head bootstrap pre-hides stored Seen cards during parsing, preventing a full-feed flash on reload.
+- A tiny head bootstrap validates retention and size limits before pre-hiding stored Seen cards during parsing, preventing both a full-feed flash and transient hiding from expired history.
 - On an all-Seen P2 or Query Loop page, that same bootstrap keeps the two-card preview visible before footer scripts run.
 - A compact caught-up status appears only after pagination is genuinely exhausted; the toolbar remains the single reveal control.
 - If a loaded page contains only previously Seen posts, the companion Load More control is triggered automatically until unseen content or the true end is reached.
@@ -28,6 +28,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - The server archive query remains untouched and cacheable.
 - Full post markup remains server-rendered; hiding is a visitor-side interaction and does not remove content from the HTML response used by search engines.
 - Achievement artwork is bundled as five optimized 96×96 transparent PNGs and only earned images are loaded.
+- Feed controls retain 44 px touch targets even under P2 Resurrected's more specific button rules.
 
 ## Supported markup
 

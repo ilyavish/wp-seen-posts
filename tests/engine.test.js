@@ -156,15 +156,17 @@ test('does not hide a reserved card when the parser reports it again', async () 
 	assert.equal(first.querySelectorAll(':scope > .wp-seen-posts-prebadge').length, 1);
 });
 
-test('removes an early preview when its stored history has expired', async () => {
+test('never pre-hides an expired history entry before the full engine starts', async () => {
 	const expired = Math.floor(Date.now() / 1000) - 366 * 86400;
 	const { window } = await boot({ 1: expired, 2: expired }, {
 		beforeEval(currentWindow) {
 			currentWindow.wpSeenPostsEarlyConfig = {
-				storageKey: 'wp_seen_posts_v1', previewCount: 2, previewSelector: '#postlist > li.post', seenLabel: 'Seen'
+				storageKey: 'wp_seen_posts_v1', previewCount: 2, previewSelector: '#postlist > li.post',
+				maxEntries: 3000, retentionDays: 365, seenLabel: 'Seen'
 			};
 			currentWindow.eval(earlyHide);
-			assert.equal(currentWindow.document.querySelectorAll('.wp-seen-posts-prebadge').length, 2);
+			assert.equal(currentWindow.document.querySelectorAll('.wp-seen-posts-prebadge').length, 0);
+			assert.equal(currentWindow.document.querySelectorAll('.wp-seen-posts-prepreview, .wp-seen-posts-prehidden').length, 0);
 		}
 	});
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
@@ -228,6 +230,43 @@ test('coalesces simultaneous Seen history writes', async () => {
 	await new Promise((resolve) => window.setTimeout(resolve, 15));
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-seen').length, 3);
 	assert.equal(historyWrites, 1);
+});
+
+test('merges a post recorded in another tab before writing feed history', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const { window, observer } = await boot({}, { postCount: 2 });
+	window.localStorage.setItem('wp_seen_posts_v1', JSON.stringify({ 99: now }));
+	observer.trigger(window.document.querySelector('#prologue-1'), 0.5);
+	await new Promise((resolve) => window.setTimeout(resolve, 15));
+	const stored = JSON.parse(window.localStorage.getItem('wp_seen_posts_v1'));
+	assert.deepEqual(Object.keys(stored).sort(), ['1', '99']);
+});
+
+test('does not resurrect history reset by another tab when the feed writes', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const { window, observer } = await boot({ 1: now }, { postCount: 2 });
+	window.localStorage.removeItem('wp_seen_posts_v1');
+	observer.trigger(window.document.querySelector('#prologue-2'), 0.5);
+	await new Promise((resolve) => window.setTimeout(resolve, 15));
+	const stored = JSON.parse(window.localStorage.getItem('wp_seen_posts_v1'));
+	assert.deepEqual(Object.keys(stored), ['2']);
+});
+
+test('reconciles another tab without collapsing a currently visible feed card', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const { window, observer } = await boot({}, { postCount: 2 });
+	const secondCard = window.document.querySelector('#prologue-2');
+	window.localStorage.setItem('wp_seen_posts_v1', JSON.stringify({ 2: now }));
+	window.dispatchEvent(new window.StorageEvent('storage', {
+		key: 'wp_seen_posts_v1',
+		newValue: JSON.stringify({ 2: now })
+	}));
+	assert.equal(secondCard.dataset.seenPostState, 'unseen');
+	assert.equal(secondCard.classList.contains('wp-seen-posts-is-hidden'), false);
+	observer.trigger(window.document.querySelector('#prologue-1'), 0.5);
+	await new Promise((resolve) => window.setTimeout(resolve, 15));
+	const stored = JSON.parse(window.localStorage.getItem('wp_seen_posts_v1'));
+	assert.deepEqual(Object.keys(stored).sort(), ['1', '2']);
 });
 
 test('keeps a newly Seen card visible after it is scrolled past and reveals prior history on request', async () => {
