@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -46,9 +46,11 @@ The supplied `posts` collection is initialized directly; the existing feed is no
 
 == Changelog ==
 
+= 1.0.3 =
+* Prevents blank feeds by automatically advancing past pages whose posts are all already Seen.
+
 = 1.0.2 =
 * Removes the duplicate empty-state action and only shows a compact caught-up status after pagination is exhausted.
-* Prevents blank feeds by automatically advancing past pages whose posts are all already Seen.
 
 = 1.0.1 =
 * Made Seen detection more responsive: 50% visibility for 750 milliseconds.
