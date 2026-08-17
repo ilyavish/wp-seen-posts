@@ -36,7 +36,7 @@ async function boot(history = {}) {
 	};
 	window.WPSeenPostsAdapters = adapters;
 	window.wpSeenPostsConfig = {
-		theme: 'p2', selectors: {}, storageKey: 'wp_seen_posts_v1', threshold: 0.6,
+		theme: 'p2', selectors: {}, storageKey: 'wp_seen_posts_v1', threshold: 0.5,
 		dwellTime: 5, maxEntries: 3000, retentionDays: 365, i18n: strings()
 	};
 	window.confirm = () => true;
@@ -54,7 +54,7 @@ test('hides history from page load but keeps a newly Seen card visible', async (
 	assert.equal(oldCard.classList.contains('wp-seen-posts-is-hidden'), true);
 	assert.equal(observer.observed.has(newCard), true);
 
-	observer.trigger(newCard, 0.6);
+	observer.trigger(newCard, 0.5);
 	await new Promise((resolve) => window.setTimeout(resolve, 10));
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-seen'), true);
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
@@ -93,4 +93,3 @@ test('reset clears only Seen history and re-observes loaded cards', async () => 
 	assert.equal(oldCard.classList.contains('wp-seen-posts-is-hidden'), false);
 	assert.equal(observer.observed.has(oldCard), true);
 });
-

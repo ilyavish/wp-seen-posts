@@ -136,19 +136,19 @@
 			entries.forEach(function (entry) {
 				var card = entry.target;
 				var id = card.dataset.seenPostId;
-				if (entry.isIntersecting && entry.intersectionRatio >= safeNumber(config.threshold, 0.6) && document.visibilityState === 'visible') {
+				if (entry.isIntersecting && entry.intersectionRatio >= safeNumber(config.threshold, 0.5) && document.visibilityState === 'visible') {
 					if (!timers.has(card)) {
 						timers.set(card, window.setTimeout(function () {
 							timers.delete(card);
 							if (document.visibilityState === 'visible' && card.dataset.seenPostState === 'unseen') setSeen(card, id, false);
-						}, safeNumber(config.dwellTime, 1500)));
+						}, safeNumber(config.dwellTime, 750)));
 					}
 				} else if (timers.has(card)) {
 					window.clearTimeout(timers.get(card));
 					timers.delete(card);
 				}
 			});
-		}, { threshold: [safeNumber(config.threshold, 0.6)] });
+		}, { threshold: [safeNumber(config.threshold, 0.5)] });
 
 		document.addEventListener('visibilitychange', function () {
 			if (document.visibilityState !== 'visible') {
