@@ -1,0 +1,12 @@
+{
+  "name": "wp-seen-posts",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js && node --check assets/js/seen-posts.js"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}
+

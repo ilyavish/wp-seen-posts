@@ -1,0 +1,74 @@
+.wp-seen-posts-controls {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	margin: 0 0 1rem;
+}
+
+.wp-seen-posts-toggle,
+.wp-seen-posts-empty button {
+	appearance: none;
+	background: #f0f0f1;
+	border: 1px solid #8c8f94;
+	border-radius: 3px;
+	color: #1d2327;
+	cursor: pointer;
+	font: inherit;
+	padding: 0.35rem 0.7rem;
+}
+
+.wp-seen-posts-toggle:disabled {
+	cursor: default;
+	opacity: 0.55;
+}
+
+.wp-seen-posts-reset {
+	appearance: none;
+	background: none;
+	border: 0;
+	color: inherit;
+	cursor: pointer;
+	font: inherit;
+	font-size: 0.85em;
+	opacity: 0.65;
+	padding: 0.35rem 0;
+	text-decoration: underline;
+}
+
+.wp-seen-posts-is-hidden {
+	display: none !important;
+}
+
+.wp-seen-posts-is-seen:not(.wp-seen-posts-is-hidden) {
+	opacity: 0.78;
+}
+
+.wp-seen-posts-badge {
+	background: #f0f0f1;
+	border-radius: 999px;
+	color: #50575e;
+	float: right;
+	font-size: 0.72rem;
+	font-weight: 600;
+	line-height: 1;
+	margin: 0.35rem;
+	padding: 0.3rem 0.48rem;
+}
+
+.wp-seen-posts-empty {
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 3px;
+	margin: 0 0 1rem;
+	padding: 1rem;
+	text-align: center;
+}
+
+.wp-seen-posts-empty[hidden] { display: none; }
+.wp-seen-posts-empty strong,
+.wp-seen-posts-empty span { display: block; margin-bottom: 0.5rem; }
+
+/* P2's feed is a list; these controls intentionally sit immediately above it. */
+#main > .wp-seen-posts-controls,
+#main > .wp-seen-posts-empty { margin-left: 0; margin-right: 0; }
+
