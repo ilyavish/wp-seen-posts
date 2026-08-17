@@ -53,8 +53,13 @@
 	}
 
 	function init() {
+		var earlyHide = window.WPSeenPostsEarlyHide;
+		if (earlyHide) earlyHide.stop();
 		var adapter = adapters.detect(document, config);
-		if (!adapter) return;
+		if (!adapter) {
+			if (earlyHide) earlyHide.release();
+			return;
+		}
 
 		var feed = adapter.feedContainer;
 		var requiredVisibility = visibilityThreshold();
@@ -299,6 +304,7 @@
 		});
 
 		initializePosts(adapter.posts);
+		if (earlyHide) earlyHide.release();
 		document.documentElement.classList.add('wp-seen-posts-active');
 		window.setTimeout(continueFeedIfNeeded, 0);
 	}

@@ -7,6 +7,7 @@ const path = require('node:path');
 const { JSDOM } = require('jsdom');
 const adapters = require('../assets/js/adapters.js');
 
+const earlyHide = fs.readFileSync(path.join(__dirname, '../assets/js/early-hide.js'), 'utf8');
 const engine = fs.readFileSync(path.join(__dirname, '../assets/js/seen-posts.js'), 'utf8');
 
 function strings() {
@@ -61,6 +62,36 @@ async function boot(history = {}, options = {}) {
 	await new Promise((resolve) => window.setTimeout(resolve, 0));
 	return { dom, window, observer: observers[0], loadMoreClicks: () => loadMoreClicks };
 }
+
+test('pre-hides stored cards before the engine takes ownership on reload', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	let hiddenBeforeEngine = false;
+	const { window } = await boot({ 1: now }, {
+		beforeEval(currentWindow) {
+			currentWindow.wpSeenPostsEarlyConfig = { storageKey: 'wp_seen_posts_v1' };
+			currentWindow.eval(earlyHide);
+			hiddenBeforeEngine = currentWindow.document.querySelector('#prologue-1').classList.contains('wp-seen-posts-prehidden');
+		}
+	});
+	const oldCard = window.document.querySelector('#prologue-1');
+	assert.equal(hiddenBeforeEngine, true);
+	assert.equal(oldCard.classList.contains('wp-seen-posts-prehidden'), false);
+	assert.equal(oldCard.classList.contains('wp-seen-posts-is-hidden'), true);
+});
+
+test('releases early-hidden cards if the full engine never activates', () => {
+	const dom = new JSDOM('<!doctype html><html><body><article id="post-1" class="post post-1">Post</article></body></html>', {
+		url: 'https://example.com/', runScripts: 'outside-only'
+	});
+	const { window } = dom;
+	window.localStorage.setItem('wp_seen_posts_v1', JSON.stringify({ 1: Math.floor(Date.now() / 1000) }));
+	window.wpSeenPostsEarlyConfig = { storageKey: 'wp_seen_posts_v1' };
+	window.eval(earlyHide);
+	const card = window.document.querySelector('#post-1');
+	assert.equal(card.classList.contains('wp-seen-posts-prehidden'), true);
+	window.dispatchEvent(new window.Event('load'));
+	assert.equal(card.classList.contains('wp-seen-posts-prehidden'), false);
+});
 
 test('initializes a large Seen history without calculating hidden badge layouts', async () => {
 	const now = Math.floor(Date.now() / 1000);

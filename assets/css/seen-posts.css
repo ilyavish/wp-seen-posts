@@ -40,7 +40,8 @@
 	text-decoration: underline;
 }
 
-.wp-seen-posts-is-hidden {
+.wp-seen-posts-is-hidden,
+.wp-seen-posts-prehidden {
 	display: none !important;
 }
 

@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks posts viewed in archive feeds, hides previously seen posts on later visits, and integrates with progressive infinite scrolling.
- * Version:           1.0.7
+ * Version:           1.0.8
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.0.7';
+const VERSION = '1.0.8';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
@@ -112,6 +112,17 @@ function enqueue_assets(): void {
 
 	/** Filters the public JavaScript configuration. */
 	$config = apply_filters( 'wp_seen_posts_script_config', $config );
+	$storage_key = isset( $config['storageKey'] ) && is_string( $config['storageKey'] ) ? $config['storageKey'] : 'wp_seen_posts_v1';
+
+	$early_script = file_get_contents( __DIR__ . '/assets/js/early-hide.js' );
+	if ( false !== $early_script ) {
+		wp_register_script( 'wp-seen-posts-early-hide', false, array(), VERSION, false );
+		wp_enqueue_script( 'wp-seen-posts-early-hide' );
+		wp_add_inline_script(
+			'wp-seen-posts-early-hide',
+			'window.wpSeenPostsEarlyConfig = ' . wp_json_encode( array( 'storageKey' => $storage_key ) ) . ';' . "\n" . $early_script
+		);
+	}
 
 	wp_add_inline_script(
 		'wp-seen-posts',
