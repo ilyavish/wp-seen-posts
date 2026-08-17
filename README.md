@@ -15,10 +15,12 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - If a loaded page contains only previously Seen posts, the companion Load More control is triggered automatically until unseen content or the true end is reached.
 - During an automatic advance with no preview available, a compact “Loading unseen posts…” status appears instead of an unexplained empty feed.
 - If a reload would otherwise contain no visible cards, two recent Seen cards remain as a stable preview while unseen pages load, avoiding both blank waits and live removal.
-- The small Seen badge is anchored to the bottom-right corner of its post card.
-- At 5, 10, 20, and 50 unique Seen posts, visitors accumulate beer, vodka, tracksuit, and gopnik achievement icons beside the controls; the highest earned icon replaces the Seen word on cards.
+- The small Seen badge is anchored to the bottom-right corner of its post card and keeps the Seen word visible beside the visitor's highest earned badge.
+- At 5, 10, 20, and 50 unique Seen posts, visitors accumulate beer, vodka, tracksuit, and gopnik achievement icons in a light badge shelf aligned opposite the feed buttons.
+- Badge images have descriptive alternative text. Desktop hover/focus and mobile taps explain exactly why each badge was earned.
+- A newly unlocked milestone gets one short badge-pop animation and a compact explanatory toast, with motion disabled when the visitor requests reduced motion.
 - On the next page load, previously Seen cards start hidden and can be revealed; the two-card preview is used only when hiding everything would leave the feed empty.
-- Individual blog posts opened directly are recorded after one visible second, so visits from search engines and widgets count; WordPress pages are never tracked by default.
+- Individual blog posts opened directly are recorded after one visible second and visibly show Seen plus earned badges at the end of the post, so visits from search engines and widgets count; WordPress pages are never tracked by default.
 - Anonymous state is stored as `{ postId: unixTimestamp }` in `wp_seen_posts_v1`.
 - History defaults to 365 days and 3,000 IDs. Use `WP_SEEN_POSTS_RETENTION_DAYS`, `WP_SEEN_POSTS_MAX_ENTRIES`, or their matching filters to change the limits.
 - The server archive query remains untouched and cacheable.

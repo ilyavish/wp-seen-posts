@@ -14,16 +14,17 @@ function strings() {
 	return {
 		showSeen: 'Show seen', hideSeen: 'Hide seen', seen: 'Seen', reset: 'Reset seen history',
 		confirmReset: 'Reset?', loadingUnseen: 'Loading unseen posts…', noUnseenPage: 'No unseen posts on this page.',
-		caughtUp: "You're all caught up.", achievements: 'Seen achievements'
+		caughtUp: "You're all caught up.", achievements: 'Your badges',
+		badgeHint: 'Tap a badge to see why you earned it.', achievementUnlocked: 'Achievement unlocked!'
 	};
 }
 
 function badges() {
 	return [
-		{ key: 'beer', threshold: 5, label: 'Beer badge — 5 Seen posts', url: 'https://example.com/badges/beer.png' },
-		{ key: 'vodka', threshold: 10, label: 'Vodka badge — 10 Seen posts', url: 'https://example.com/badges/vodka.png' },
-		{ key: 'tracksuit', threshold: 20, label: 'Adidas tracksuit badge — 20 Seen posts', url: 'https://example.com/badges/adidas.png' },
-		{ key: 'gopnik', threshold: 50, label: 'Gopnik badge — 50 Seen posts', url: 'https://example.com/badges/gopnik.png' }
+		{ key: 'beer', threshold: 5, label: 'Beer badge', description: 'You earned the Beer badge for seeing 5 posts.', alt: 'Cute beer badge', url: 'https://example.com/badges/beer.png' },
+		{ key: 'vodka', threshold: 10, label: 'Vodka badge', description: 'You earned the Vodka badge for seeing 10 posts.', alt: 'Vodka bottle badge', url: 'https://example.com/badges/vodka.png' },
+		{ key: 'tracksuit', threshold: 20, label: 'Tracksuit badge', description: 'You earned the Tracksuit badge for seeing 20 posts.', alt: 'Black tracksuit badge', url: 'https://example.com/badges/adidas.png' },
+		{ key: 'gopnik', threshold: 50, label: 'Gopnik badge', description: 'You earned the Gopnik badge for seeing 50 posts.', alt: 'Gopnik character badge', url: 'https://example.com/badges/gopnik.png' }
 	];
 }
 
@@ -252,7 +253,7 @@ test('keeps a newly Seen card visible after it is scrolled past and reveals prio
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
 });
 
-test('unlocks the beer milestone and replaces Seen with its image', async () => {
+test('unlocks the beer milestone beside Seen with a brief, explained achievement', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const { window, observer } = await boot({ 1: now, 2: now, 3: now, 4: now }, { postCount: 5 });
 	const achievements = window.document.querySelector('.wp-seen-posts-achievements');
@@ -263,13 +264,21 @@ test('unlocks the beer milestone and replaces Seen with its image', async () => 
 	assert.equal(achievements.hidden, false);
 	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer']);
 	assert.equal(achievements.querySelector('img').src, 'https://example.com/badges/beer.png');
+	assert.equal(achievements.querySelector('img').alt, 'Cute beer badge');
+	assert.equal(achievements.querySelector('.wp-seen-posts-achievement-tooltip').textContent, 'You earned the Beer badge for seeing 5 posts.');
+	const achievementButton = achievements.querySelector('.wp-seen-posts-achievement-button');
+	achievementButton.click();
+	assert.equal(achievementButton.getAttribute('aria-expanded'), 'true');
+	window.document.body.click();
+	assert.equal(achievementButton.getAttribute('aria-expanded'), 'false');
 	const cardBadge = fifth.querySelector(':scope > .wp-seen-posts-badge');
-	assert.equal(cardBadge.textContent, '');
-	assert.equal(cardBadge.getAttribute('aria-label'), 'Beer badge — 5 Seen posts');
+	assert.equal(cardBadge.querySelector('.wp-seen-posts-badge-text').textContent, 'Seen');
+	assert.equal(cardBadge.getAttribute('aria-label'), 'Seen. You earned the Beer badge for seeing 5 posts.');
 	assert.equal(cardBadge.querySelector('img').src, 'https://example.com/badges/beer.png');
+	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast').textContent.includes('Achievement unlocked!'), true);
 });
 
-test('accumulates all earned milestones and uses the highest badge on cards', async () => {
+test('accumulates all earned milestones and keeps Seen beside the highest badge on cards', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const history = Object.fromEntries(Array.from({ length: 50 }, (_, index) => [String(index + 1), now]));
 	const { window } = await boot(history);
@@ -277,12 +286,13 @@ test('accumulates all earned milestones and uses the highest badge on cards', as
 	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer', 'vodka', 'tracksuit', 'gopnik']);
 	assert.equal(achievements.querySelectorAll('img').length, 4);
 	window.document.querySelectorAll('.wp-seen-posts-badge').forEach((badge) => {
-		assert.equal(badge.getAttribute('aria-label'), 'Gopnik badge — 50 Seen posts');
+		assert.equal(badge.querySelector('.wp-seen-posts-badge-text').textContent, 'Seen');
+		assert.equal(badge.getAttribute('aria-label'), 'Seen. You earned the Gopnik badge for seeing 50 posts.');
 		assert.equal(badge.querySelector('img').src, 'https://example.com/badges/gopnik.png');
 	});
 	window.document.querySelector('.wp-seen-posts-reset').click();
 	assert.equal(achievements.hidden, true);
-	assert.equal(achievements.children.length, 0);
+	assert.equal(achievements.querySelector('.wp-seen-posts-achievements-list').children.length, 0);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
 });
 

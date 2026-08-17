@@ -22,10 +22,12 @@
 			key: badge && typeof badge.key === 'string' ? badge.key : '',
 			threshold: Math.floor(Number(badge && badge.threshold) || 0),
 			label: badge && typeof badge.label === 'string' ? badge.label : '',
+			description: badge && typeof badge.description === 'string' ? badge.description : '',
+			alt: badge && typeof badge.alt === 'string' ? badge.alt : '',
 			url: badge && typeof badge.url === 'string' ? badge.url : ''
 		};
 	}).filter(function (badge) {
-		return badge.key && badge.threshold > 0 && badge.label && badge.url;
+		return badge.key && badge.threshold > 0 && badge.label && badge.description && badge.url;
 	}).sort(function (a, b) { return a.threshold - b.threshold; }) : [];
 	var previewCards = [];
 	var foundUnseenPreviewCard = false;
@@ -59,24 +61,27 @@
 		element.classList.add('wp-seen-posts-prepreview', 'wp-seen-posts-position-context');
 		var badge = document.createElement('span');
 		badge.className = 'wp-seen-posts-badge wp-seen-posts-prebadge';
+		var seenText = document.createElement('span');
+		seenText.className = 'wp-seen-posts-badge-text';
+		seenText.textContent = seenLabel;
+		badge.appendChild(seenText);
 		var milestone = null;
 		milestones.forEach(function (candidate) {
 			if (seenIds.size >= candidate.threshold) milestone = candidate;
 		});
 		if (milestone) {
 			badge.classList.add('wp-seen-posts-badge-earned');
-			badge.setAttribute('aria-label', milestone.label);
-			badge.title = milestone.label;
+			badge.setAttribute('aria-label', seenLabel + '. ' + milestone.description);
+			badge.title = milestone.description;
 			var image = document.createElement('img');
 			image.className = 'wp-seen-posts-badge-image';
 			image.src = milestone.url;
-			image.alt = '';
+			image.alt = milestone.alt || milestone.label;
 			image.width = 24;
 			image.height = 24;
 			image.decoding = 'async';
-			image.setAttribute('aria-hidden', 'true');
 			badge.appendChild(image);
-		} else badge.textContent = seenLabel;
+		}
 		element.insertAdjacentElement('afterbegin', badge);
 		previewCards.push(element);
 	}

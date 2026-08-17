@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks posts viewed in archive feeds, hides previously seen posts on later visits, and integrates with progressive infinite scrolling.
- * Version:           1.0.13
+ * Version:           1.0.14
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.0.13';
+const VERSION = '1.0.14';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
@@ -70,33 +70,41 @@ function history_limits(): array {
 /**
  * Return the lightweight local milestone artwork and thresholds.
  *
- * @return array<int,array{key:string,threshold:int,label:string,url:string}>
+ * @return array<int,array{key:string,threshold:int,label:string,description:string,alt:string,url:string}>
  */
 function achievement_badges(): array {
 	return array(
 		array(
-			'key'       => 'beer',
-			'threshold' => 5,
-			'label'     => __( 'Beer badge — 5 Seen posts', 'wp-seen-posts' ),
-			'url'       => plugins_url( 'assets/images/badges/beer.png', __FILE__ ),
+			'key'         => 'beer',
+			'threshold'   => 5,
+			'label'       => __( 'Beer badge', 'wp-seen-posts' ),
+			'description' => __( 'You earned the Beer badge for seeing 5 posts.', 'wp-seen-posts' ),
+			'alt'         => __( 'Cute beer badge earned after 5 Seen posts', 'wp-seen-posts' ),
+			'url'         => plugins_url( 'assets/images/badges/beer.png', __FILE__ ),
 		),
 		array(
-			'key'       => 'vodka',
-			'threshold' => 10,
-			'label'     => __( 'Vodka badge — 10 Seen posts', 'wp-seen-posts' ),
-			'url'       => plugins_url( 'assets/images/badges/vodka.png', __FILE__ ),
+			'key'         => 'vodka',
+			'threshold'   => 10,
+			'label'       => __( 'Vodka badge', 'wp-seen-posts' ),
+			'description' => __( 'You earned the Vodka badge for seeing 10 posts.', 'wp-seen-posts' ),
+			'alt'         => __( 'Vodka bottle badge earned after 10 Seen posts', 'wp-seen-posts' ),
+			'url'         => plugins_url( 'assets/images/badges/vodka.png', __FILE__ ),
 		),
 		array(
-			'key'       => 'tracksuit',
-			'threshold' => 20,
-			'label'     => __( 'Adidas tracksuit badge — 20 Seen posts', 'wp-seen-posts' ),
-			'url'       => plugins_url( 'assets/images/badges/adidas.png', __FILE__ ),
+			'key'         => 'tracksuit',
+			'threshold'   => 20,
+			'label'       => __( 'Tracksuit badge', 'wp-seen-posts' ),
+			'description' => __( 'You earned the Tracksuit badge for seeing 20 posts.', 'wp-seen-posts' ),
+			'alt'         => __( 'Black tracksuit badge earned after 20 Seen posts', 'wp-seen-posts' ),
+			'url'         => plugins_url( 'assets/images/badges/adidas.png', __FILE__ ),
 		),
 		array(
-			'key'       => 'gopnik',
-			'threshold' => 50,
-			'label'     => __( 'Gopnik badge — 50 Seen posts', 'wp-seen-posts' ),
-			'url'       => plugins_url( 'assets/images/badges/gopnik.png', __FILE__ ),
+			'key'         => 'gopnik',
+			'threshold'   => 50,
+			'label'       => __( 'Gopnik badge', 'wp-seen-posts' ),
+			'description' => __( 'You earned the Gopnik badge for seeing 50 posts.', 'wp-seen-posts' ),
+			'alt'         => __( 'Gopnik character badge earned after 50 Seen posts', 'wp-seen-posts' ),
+			'url'         => plugins_url( 'assets/images/badges/gopnik.png', __FILE__ ),
 		),
 	);
 }
@@ -116,6 +124,13 @@ function enqueue_assets(): void {
 
 	$limits = history_limits();
 
+	wp_enqueue_style(
+		'wp-seen-posts',
+		plugins_url( 'assets/css/seen-posts.css', __FILE__ ),
+		array(),
+		VERSION
+	);
+
 	if ( $single_view ) {
 		wp_enqueue_script(
 			'wp-seen-posts-single',
@@ -133,6 +148,13 @@ function enqueue_assets(): void {
 					'dwellTime'     => 1000,
 					'maxEntries'    => $limits['max_entries'],
 					'retentionDays' => $limits['retention_days'],
+					'badges'        => achievement_badges(),
+					'i18n'          => array(
+						'seen'                => __( 'Seen', 'wp-seen-posts' ),
+						'achievements'        => __( 'Your badges', 'wp-seen-posts' ),
+						'badgeHint'            => __( 'Tap a badge to see why you earned it.', 'wp-seen-posts' ),
+						'achievementUnlocked' => __( 'Achievement unlocked!', 'wp-seen-posts' ),
+					),
 				)
 			) . ';',
 			'before'
@@ -153,13 +175,6 @@ function enqueue_assets(): void {
 
 	$current_page   = max( 1, (int) get_query_var( 'paged' ) );
 	$has_more_pages = isset( $wp_query->max_num_pages ) && $current_page < (int) $wp_query->max_num_pages;
-
-	wp_enqueue_style(
-		'wp-seen-posts',
-		plugins_url( 'assets/css/seen-posts.css', __FILE__ ),
-		array(),
-		VERSION
-	);
 
 	wp_enqueue_script(
 		'wp-seen-posts-adapters',
@@ -197,7 +212,9 @@ function enqueue_assets(): void {
 			'loadingUnseen'  => __( 'Loading unseen posts…', 'wp-seen-posts' ),
 			'noUnseenPage'   => __( 'No unseen posts on this page.', 'wp-seen-posts' ),
 			'caughtUp'       => __( "You're all caught up.", 'wp-seen-posts' ),
-			'achievements'   => __( 'Seen achievements', 'wp-seen-posts' ),
+			'achievements'   => __( 'Your badges', 'wp-seen-posts' ),
+			'badgeHint'      => __( 'Tap a badge to see why you earned it.', 'wp-seen-posts' ),
+			'achievementUnlocked' => __( 'Achievement unlocked!', 'wp-seen-posts' ),
 		),
 	);
 

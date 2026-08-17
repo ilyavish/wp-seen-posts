@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.13
+Stable tag: 1.0.14
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,10 +20,11 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Shows one compact caught-up status only when no more archive pages remain.
 * Automatically skips fully Seen pages through the companion infinite-scroll control.
 * Keeps two recent Seen cards visible as a stable preview if a reload would otherwise look empty.
-* Places the Seen label in the bottom-right corner of each post card.
+* Places the Seen label and highest earned badge together in the bottom-right corner of each post card.
 * Hides previously Seen posts on the next page load.
-* Records individual blog posts as Seen after a one-second visible visit, including direct and search-engine arrivals; WordPress pages are not tracked.
+* Records individual blog posts as Seen after a one-second visible visit, then shows Seen and earned badges at the end of the post; WordPress pages are not tracked.
 * Unlocks locally bundled beer, vodka, tracksuit, and gopnik badges at 5, 10, 20, and 50 unique Seen posts.
+* Explains badges on hover, keyboard focus, and mobile tap, with descriptive image text and a short reduced-motion-safe unlock celebration.
 * Stores anonymous history only in localStorage, with age and size pruning.
 * Supports P2 and P2 Resurrected automatically.
 * Supports Query Loop blocks and conservative classic-theme markup.
@@ -47,6 +48,14 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.0.14 =
+* Replaces the dark badge capsule with a light, playful shelf aligned to the right of the left-aligned feed buttons.
+* Keeps Seen visible beside milestone artwork on feed cards.
+* Shows Seen and accumulated earned badges on directly opened single posts, while continuing to exclude pages.
+* Adds hover, focus, and tap explanations plus descriptive badge image text.
+* Adds a short, lightweight milestone unlock animation and explanatory toast with reduced-motion support.
+* Updates the beer, tracksuit, and gopnik artwork.
 
 = 1.0.13 =
 * Records directly opened single posts as Seen after one visible second, without tracking pages.

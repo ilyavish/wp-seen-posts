@@ -62,10 +62,12 @@
 				key: badge && typeof badge.key === 'string' ? badge.key : '',
 				threshold: Math.floor(Number(badge && badge.threshold) || 0),
 				label: badge && typeof badge.label === 'string' ? badge.label : '',
+				description: badge && typeof badge.description === 'string' ? badge.description : '',
+				alt: badge && typeof badge.alt === 'string' ? badge.alt : '',
 				url: badge && typeof badge.url === 'string' ? badge.url : ''
 			};
 		}).filter(function (badge) {
-			return badge.key && badge.threshold > 0 && badge.label && badge.url;
+			return badge.key && badge.threshold > 0 && badge.label && badge.description && badge.url;
 		}).sort(function (a, b) { return a.threshold - b.threshold; });
 	}
 
@@ -107,7 +109,10 @@
 		var historyWriteTimer = null;
 		var historyDirty = false;
 		var achievementSignature = '';
+		var achievementsInitialized = false;
 		var activeMilestoneKey = '';
+		var milestoneToast = null;
+		var milestoneToastTimer = null;
 
 		function flushHistory(forcePrune) {
 			if (historyWriteTimer) window.clearTimeout(historyWriteTimer);
@@ -132,6 +137,8 @@
 
 		var controls = document.createElement('div');
 		controls.className = 'wp-seen-posts-controls';
+		var actions = document.createElement('div');
+		actions.className = 'wp-seen-posts-actions';
 		var toggle = document.createElement('button');
 		toggle.type = 'button';
 		toggle.className = 'wp-seen-posts-toggle';
@@ -142,11 +149,24 @@
 		var achievements = document.createElement('div');
 		achievements.className = 'wp-seen-posts-achievements';
 		achievements.hidden = true;
-		achievements.setAttribute('role', 'list');
+		achievements.setAttribute('role', 'region');
 		achievements.setAttribute('aria-label', config.i18n.achievements || 'Seen achievements');
-		controls.appendChild(toggle);
+		var achievementsTitle = document.createElement('span');
+		achievementsTitle.className = 'wp-seen-posts-achievements-title';
+		achievementsTitle.textContent = config.i18n.achievements || 'Your badges';
+		var achievementsList = document.createElement('span');
+		achievementsList.className = 'wp-seen-posts-achievements-list';
+		achievementsList.setAttribute('role', 'list');
+		var achievementsHint = document.createElement('span');
+		achievementsHint.className = 'wp-seen-posts-achievements-hint';
+		achievementsHint.textContent = config.i18n.badgeHint || 'Tap a badge to see why you earned it.';
+		actions.appendChild(toggle);
+		actions.appendChild(reset);
+		controls.appendChild(actions);
+		achievements.appendChild(achievementsTitle);
+		achievements.appendChild(achievementsList);
+		achievements.appendChild(achievementsHint);
 		controls.appendChild(achievements);
-		controls.appendChild(reset);
 		feed.insertAdjacentElement('beforebegin', controls);
 
 		var empty = document.createElement('p');
@@ -183,11 +203,10 @@
 			var image = document.createElement('img');
 			image.className = className;
 			image.src = milestone.url;
-			image.alt = '';
+			image.alt = milestone.alt || milestone.label;
 			image.width = size;
 			image.height = size;
 			image.decoding = 'async';
-			image.setAttribute('aria-hidden', 'true');
 			return image;
 		}
 
@@ -195,35 +214,107 @@
 			var milestone = currentMilestone();
 			while (badge.firstChild) badge.removeChild(badge.firstChild);
 			badge.classList.toggle('wp-seen-posts-badge-earned', Boolean(milestone));
+			var seenText = document.createElement('span');
+			seenText.className = 'wp-seen-posts-badge-text';
+			seenText.textContent = config.i18n.seen;
+			badge.appendChild(seenText);
 			if (!milestone) {
-				badge.textContent = config.i18n.seen;
 				badge.removeAttribute('aria-label');
 				badge.removeAttribute('title');
 				return;
 			}
-			badge.setAttribute('aria-label', milestone.label);
-			badge.title = milestone.label;
+			badge.setAttribute('aria-label', config.i18n.seen + '. ' + milestone.description);
+			badge.title = milestone.description;
 			badge.appendChild(createMilestoneImage(milestone, 'wp-seen-posts-badge-image', 24));
+		}
+
+		function closeAchievementExplanations(except) {
+			achievementsList.querySelectorAll('.wp-seen-posts-achievement.is-explaining').forEach(function (item) {
+				if (item === except) return;
+				item.classList.remove('is-explaining');
+				var button = item.querySelector('.wp-seen-posts-achievement-button');
+				if (button) {
+					button.setAttribute('aria-expanded', 'false');
+					if (document.activeElement === button) button.blur();
+				}
+			});
+		}
+
+		function createAchievementItem(milestone, animate) {
+			var item = document.createElement('span');
+			item.className = 'wp-seen-posts-achievement' + (animate ? ' wp-seen-posts-achievement-unlocked' : '');
+			item.dataset.badgeKey = milestone.key;
+			item.setAttribute('role', 'listitem');
+			var button = document.createElement('button');
+			button.type = 'button';
+			button.className = 'wp-seen-posts-achievement-button';
+			button.setAttribute('aria-label', milestone.description);
+			button.setAttribute('aria-expanded', 'false');
+			button.title = milestone.description;
+			var tooltip = document.createElement('span');
+			tooltip.className = 'wp-seen-posts-achievement-tooltip';
+			tooltip.id = 'wp-seen-posts-tooltip-' + milestone.key;
+			tooltip.setAttribute('role', 'tooltip');
+			tooltip.textContent = milestone.description;
+			button.setAttribute('aria-describedby', tooltip.id);
+			button.appendChild(createMilestoneImage(milestone, 'wp-seen-posts-achievement-image', 36));
+			button.addEventListener('click', function (event) {
+				event.stopPropagation();
+				var open = !item.classList.contains('is-explaining');
+				closeAchievementExplanations(open ? item : null);
+				item.classList.toggle('is-explaining', open);
+				button.setAttribute('aria-expanded', open ? 'true' : 'false');
+			});
+			item.appendChild(button);
+			item.appendChild(tooltip);
+			return item;
+		}
+
+		function showMilestoneToast(milestone) {
+			if (!document.body) return;
+			if (milestoneToastTimer) window.clearTimeout(milestoneToastTimer);
+			if (milestoneToast) milestoneToast.remove();
+			milestoneToast = document.createElement('div');
+			milestoneToast.className = 'wp-seen-posts-unlock-toast';
+			milestoneToast.setAttribute('role', 'status');
+			milestoneToast.setAttribute('aria-live', 'polite');
+			milestoneToast.appendChild(createMilestoneImage(milestone, 'wp-seen-posts-unlock-image', 48));
+			var copy = document.createElement('span');
+			var heading = document.createElement('strong');
+			heading.textContent = config.i18n.achievementUnlocked || 'Achievement unlocked!';
+			copy.appendChild(heading);
+			copy.appendChild(document.createTextNode(' ' + milestone.description));
+			milestoneToast.appendChild(copy);
+			document.body.appendChild(milestoneToast);
+			window.setTimeout(function () {
+				if (milestoneToast) milestoneToast.classList.add('is-visible');
+			}, 0);
+			milestoneToastTimer = window.setTimeout(function () {
+				if (!milestoneToast) return;
+				milestoneToast.classList.remove('is-visible');
+				var oldToast = milestoneToast;
+				milestoneToastTimer = window.setTimeout(function () { oldToast.remove(); }, 180);
+				milestoneToast = null;
+			}, 2400);
 		}
 
 		function updateAchievements() {
 			var earned = milestones.filter(function (milestone) { return historyEntryCount >= milestone.threshold; });
 			var signature = earned.map(function (milestone) { return milestone.key; }).join(',');
+			var previousKeys = achievementSignature ? achievementSignature.split(',') : [];
+			var newlyEarned = achievementsInitialized ? earned.filter(function (milestone) {
+				return previousKeys.indexOf(milestone.key) === -1;
+			}) : [];
 			if (signature !== achievementSignature) {
 				achievementSignature = signature;
-				while (achievements.firstChild) achievements.removeChild(achievements.firstChild);
+				while (achievementsList.firstChild) achievementsList.removeChild(achievementsList.firstChild);
 				earned.forEach(function (milestone) {
-					var item = document.createElement('span');
-					item.className = 'wp-seen-posts-achievement';
-					item.dataset.badgeKey = milestone.key;
-					item.setAttribute('role', 'listitem');
-					item.setAttribute('aria-label', milestone.label);
-					item.title = milestone.label;
-					item.appendChild(createMilestoneImage(milestone, 'wp-seen-posts-achievement-image', 32));
-					achievements.appendChild(item);
+					achievementsList.appendChild(createAchievementItem(milestone, newlyEarned.indexOf(milestone) !== -1));
 				});
 				achievements.hidden = earned.length === 0;
 			}
+			achievementsInitialized = true;
+			if (newlyEarned.length) showMilestoneToast(newlyEarned[newlyEarned.length - 1]);
 
 			var active = currentMilestone();
 			var nextActiveKey = active ? active.key : '';
@@ -235,6 +326,7 @@
 				});
 			}
 		}
+		document.addEventListener('click', function () { closeAchievementExplanations(null); });
 
 		function updateUi() {
 			updateAchievements();

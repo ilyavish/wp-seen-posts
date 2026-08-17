@@ -1,46 +1,44 @@
 .wp-seen-posts-controls {
-	display: flex;
 	align-items: center;
+	display: flex;
 	flex-wrap: wrap;
 	gap: 0.75rem;
+	justify-content: space-between;
 	margin: 0 0 1rem;
 }
 
-.wp-seen-posts-toggle {
+.wp-seen-posts-actions {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+}
+
+.wp-seen-posts-toggle,
+.wp-seen-posts-reset {
 	align-items: center;
 	appearance: none;
-	background: #f0f0f1;
 	border: 1px solid #8c8f94;
-	border-radius: 3px;
+	border-radius: 999px;
 	color: #1d2327;
 	cursor: pointer;
 	display: inline-flex;
 	font: inherit;
+	font-weight: 600;
 	min-height: 44px;
-	padding: 0.35rem 0.7rem;
+	padding: 0.35rem 0.8rem;
 }
+
+.wp-seen-posts-toggle { background: #f0f0f1; }
+.wp-seen-posts-reset { background: #fff; }
 
 .wp-seen-posts-toggle:disabled {
 	cursor: default;
 	opacity: 0.55;
 }
 
-.wp-seen-posts-reset {
-	align-items: center;
-	appearance: none;
-	background: #fff;
-	border: 1px solid #8c8f94;
-	border-radius: 3px;
-	color: #1d2327;
-	cursor: pointer;
-	display: inline-flex;
-	font: inherit;
-	min-height: 44px;
-	padding: 0.35rem 0.7rem;
-	text-decoration: none;
-}
-
-.wp-seen-posts-reset[hidden] {
+.wp-seen-posts-reset[hidden],
+.wp-seen-posts-achievements[hidden] {
 	display: none;
 }
 
@@ -50,41 +48,111 @@
 }
 
 .wp-seen-posts-toggle:focus-visible,
-.wp-seen-posts-reset:focus-visible {
+.wp-seen-posts-reset:focus-visible,
+.wp-seen-posts-achievement-button:focus-visible {
 	outline: 2px solid #2271b1;
 	outline-offset: 2px;
 }
 
 .wp-seen-posts-achievements {
 	align-items: center;
-	background: #1d2327;
-	border: 2px solid #d63638;
-	border-radius: 999px;
+	background: linear-gradient(135deg, #fffdf8, #fff3f5);
+	border: 1px solid #f2c8cf;
+	border-radius: 18px;
+	box-shadow: 0 2px 8px rgba(80, 20, 35, 0.08);
 	display: inline-flex;
-	gap: 0.25rem;
-	min-height: 44px;
-	padding: 0.2rem 0.4rem;
+	gap: 0.45rem;
+	margin-left: auto;
+	max-width: 100%;
+	min-height: 48px;
+	padding: 0.28rem 0.45rem 0.28rem 0.65rem;
 }
 
-.wp-seen-posts-achievements[hidden] {
+.wp-seen-posts-achievements-title,
+.wp-seen-posts-single-achievements-title {
+	color: #71323f;
+	font-size: 0.78rem;
+	font-weight: 700;
+	line-height: 1.15;
+	white-space: nowrap;
+}
+
+.wp-seen-posts-achievements-list {
+	align-items: center;
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 0.3rem;
+	justify-content: flex-end;
+}
+
+.wp-seen-posts-achievements-hint {
 	display: none;
 }
 
 .wp-seen-posts-achievement {
-	align-items: center;
-	background: #fff;
-	border-radius: 999px;
 	display: inline-flex;
-	height: 34px;
+	position: relative;
+}
+
+.wp-seen-posts-achievement-button {
+	align-items: center;
+	appearance: none;
+	background: linear-gradient(145deg, #fff, #fff4e6);
+	border: 1px solid #efd5b8;
+	border-radius: 13px;
+	box-shadow: 0 1px 4px rgba(90, 55, 20, 0.12);
+	cursor: help;
+	display: inline-flex;
+	height: 42px;
 	justify-content: center;
-	width: 34px;
+	margin: 0;
+	padding: 2px;
+	transition: box-shadow 120ms ease, transform 120ms ease;
+	width: 42px;
+}
+
+.wp-seen-posts-achievement-button:hover,
+.wp-seen-posts-achievement.is-explaining .wp-seen-posts-achievement-button {
+	box-shadow: 0 3px 9px rgba(90, 55, 20, 0.2);
+	transform: translateY(-1px);
 }
 
 .wp-seen-posts-achievement-image {
 	display: block;
-	height: 30px;
+	height: 36px;
 	object-fit: contain;
-	width: 30px;
+	width: 36px;
+}
+
+.wp-seen-posts-achievement-tooltip {
+	background: #1d2327;
+	border-radius: 8px;
+	bottom: calc(100% + 8px);
+	color: #fff;
+	font-size: 0.76rem;
+	font-weight: 600;
+	line-height: 1.35;
+	max-width: 230px;
+	opacity: 0;
+	padding: 0.45rem 0.55rem;
+	pointer-events: none;
+	position: absolute;
+	right: 0;
+	text-align: left;
+	transform: translateY(4px);
+	transition: opacity 100ms ease, transform 100ms ease, visibility 100ms ease;
+	visibility: hidden;
+	white-space: normal;
+	width: max-content;
+	z-index: 10001;
+}
+
+.wp-seen-posts-achievement:hover .wp-seen-posts-achievement-tooltip,
+.wp-seen-posts-achievement:focus-within .wp-seen-posts-achievement-tooltip,
+.wp-seen-posts-achievement.is-explaining .wp-seen-posts-achievement-tooltip {
+	opacity: 1;
+	transform: translateY(0);
+	visibility: visible;
 }
 
 .wp-seen-posts-is-hidden,
@@ -102,28 +170,24 @@
 }
 
 .wp-seen-posts-badge {
-	background: #f0f0f1;
+	align-items: center;
+	background: #fffaf4;
+	border: 1px solid #ead8c7;
 	border-radius: 999px;
 	bottom: 0.5rem;
+	box-shadow: 0 1px 4px rgba(70, 45, 25, 0.1);
 	color: #50575e;
+	display: inline-flex;
 	font-size: 0.72rem;
-	font-weight: 600;
+	font-weight: 700;
+	gap: 0.28rem;
 	line-height: 1;
 	margin: 0;
-	padding: 0.3rem 0.48rem;
-	pointer-events: none;
+	min-height: 28px;
+	padding: 0.22rem 0.48rem;
 	position: absolute;
 	right: 0.5rem;
 	z-index: 1;
-}
-
-.wp-seen-posts-badge-earned {
-	align-items: center;
-	background: #fff;
-	border: 1px solid #c3c4c7;
-	display: inline-flex;
-	justify-content: center;
-	padding: 0.18rem;
 }
 
 .wp-seen-posts-badge-image {
@@ -147,11 +211,151 @@
 
 .wp-seen-posts-empty[hidden] { display: none; }
 
+.wp-seen-posts-single-status {
+	align-items: center;
+	clear: both;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.55rem;
+	justify-content: flex-end;
+	margin: 1.25rem 0 0.5rem;
+	text-align: right;
+}
+
+.wp-seen-posts-single-seen {
+	background: #f0f0f1;
+	border: 1px solid #c3c4c7;
+	border-radius: 999px;
+	color: #50575e;
+	font-size: 0.75rem;
+	line-height: 1;
+	padding: 0.45rem 0.62rem;
+}
+
+.wp-seen-posts-single-achievements {
+	align-items: center;
+	background: linear-gradient(135deg, #fffdf8, #fff3f5);
+	border: 1px solid #f2c8cf;
+	border-radius: 16px;
+	display: inline-flex;
+	gap: 0.4rem;
+	padding: 0.22rem 0.35rem 0.22rem 0.55rem;
+}
+
+.wp-seen-posts-unlock-toast {
+	align-items: center;
+	background: #fffdf8;
+	border: 2px solid #efb8c3;
+	border-radius: 16px;
+	bottom: 1.25rem;
+	box-shadow: 0 10px 32px rgba(52, 20, 28, 0.22);
+	color: #3c252a;
+	display: flex;
+	font-size: 0.85rem;
+	gap: 0.65rem;
+	line-height: 1.35;
+	max-width: calc(100vw - 2rem);
+	opacity: 0;
+	padding: 0.65rem 0.8rem;
+	pointer-events: none;
+	position: fixed;
+	right: 1.25rem;
+	transform: translateY(14px) scale(0.96);
+	transition: opacity 140ms ease, transform 140ms ease;
+	width: 350px;
+	z-index: 100000;
+}
+
+.wp-seen-posts-unlock-toast.is-visible {
+	opacity: 1;
+	transform: translateY(0) scale(1);
+}
+
+.wp-seen-posts-unlock-toast strong {
+	display: block;
+	font-size: 0.95rem;
+}
+
+.wp-seen-posts-unlock-image {
+	display: block;
+	flex: 0 0 48px;
+	height: 48px;
+	object-fit: contain;
+	width: 48px;
+}
+
+.wp-seen-posts-achievement-unlocked .wp-seen-posts-achievement-button {
+	animation: wp-seen-posts-badge-pop 620ms ease-out both;
+}
+
+@keyframes wp-seen-posts-badge-pop {
+	0% { transform: scale(0.55) rotate(-8deg); }
+	55% { transform: scale(1.18) rotate(4deg); }
+	75% { transform: scale(0.94) rotate(-2deg); }
+	100% { transform: scale(1) rotate(0); }
+}
+
 /* P2's feed is a list; these controls intentionally sit immediately above it. */
 #main > .wp-seen-posts-controls,
 #main > .wp-seen-posts-empty { margin-left: 0; margin-right: 0; }
 
 @media (max-width: 600px) {
-	.wp-seen-posts-controls { gap: 0.5rem; }
-	.wp-seen-posts-achievements { max-width: 100%; }
+	.wp-seen-posts-controls { gap: 0.6rem; }
+	.wp-seen-posts-actions { gap: 0.5rem; width: 100%; }
+	.wp-seen-posts-achievements {
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		margin-left: auto;
+		max-width: 290px;
+		padding: 0.42rem 0.5rem;
+	}
+	.wp-seen-posts-achievements-title,
+	.wp-seen-posts-achievements-hint {
+		text-align: right;
+		width: 100%;
+	}
+	.wp-seen-posts-achievements-hint {
+		color: #71323f;
+		display: block;
+		font-size: 0.68rem;
+		line-height: 1.25;
+	}
+	.wp-seen-posts-achievement-button { cursor: pointer; }
+	.wp-seen-posts-achievement-tooltip {
+		bottom: 0.75rem;
+		font-size: 0.8rem;
+		left: 0.75rem;
+		max-width: none;
+		position: fixed;
+		right: 0.75rem;
+		width: auto;
+	}
+	.wp-seen-posts-single-status { align-items: flex-end; flex-direction: column; }
+	.wp-seen-posts-single-achievements {
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		max-width: 290px;
+	}
+	.wp-seen-posts-single-achievements-title,
+	.wp-seen-posts-single-achievements .wp-seen-posts-achievements-hint {
+		text-align: right;
+		width: 100%;
+	}
+	.wp-seen-posts-unlock-toast {
+		bottom: 0.75rem;
+		font-size: 0.78rem;
+		left: 0.75rem;
+		max-width: none;
+		right: 0.75rem;
+		width: auto;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wp-seen-posts-achievement-button,
+	.wp-seen-posts-achievement-tooltip,
+	.wp-seen-posts-unlock-toast {
+		animation: none !important;
+		transition: none !important;
+	}
 }
