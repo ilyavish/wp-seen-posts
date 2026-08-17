@@ -146,6 +146,23 @@
 			updateUi();
 		}
 
+		function requestMoreIfAllHidden() {
+			if (feedExhausted || showSeen || !cards.size) return;
+			var hasVisibleCard = false;
+			cards.forEach(function (card) {
+				if (!card.classList.contains('wp-seen-posts-is-hidden')) hasVisibleCard = true;
+			});
+			if (hasVisibleCard) return;
+
+			var loadMore = document.querySelector('.wp-pfis-load-more:not([aria-disabled="true"]):not(:disabled)');
+			if (loadMore) loadMore.click();
+		}
+
+		function continueFeedIfNeeded() {
+			refreshFeedExhaustion();
+			requestMoreIfAllHidden();
+		}
+
 		function setSeen(card, id, fromHistory) {
 			card.classList.add('wp-seen-posts-is-seen');
 			card.dataset.seenPostState = 'seen';
@@ -273,6 +290,7 @@
 			if (!value) hideSessionSeen = true;
 			cards.forEach(function (card, id) { applyCardVisibility(card, id); });
 			updateUi();
+			if (!value) window.setTimeout(requestMoreIfAllHidden, 0);
 		}
 
 		toggle.addEventListener('click', function () { setShowSeen(!showSeen); });
@@ -303,13 +321,13 @@
 		document.addEventListener('wpFeedPostsAdded', function (event) {
 			if (!event.detail || event.detail.container !== feed || !event.detail.posts) return;
 			initializePosts(event.detail.posts);
-			/* Use the companion plugin's own control to cross an all-hidden page. */
-			var added = Array.prototype.filter.call(event.detail.posts, function (post) { return post && post.dataset.seenPostInitialized === 'true'; });
-			if (added.length && added.every(function (post) { return post.classList.contains('wp-seen-posts-is-hidden'); })) {
-				var loadMore = document.querySelector('.wp-pfis-load-more:not([aria-disabled="true"])');
-				if (loadMore) window.setTimeout(function () { loadMore.click(); }, 0);
-			}
-			window.setTimeout(refreshFeedExhaustion, 0);
+			/* Wait until the companion loader finishes updating its controls, then skip an all-Seen page. */
+			window.setTimeout(continueFeedIfNeeded, 0);
+		});
+
+		document.addEventListener('wpFeedInfiniteScrollReady', function (event) {
+			if (event.detail && event.detail.container && event.detail.container !== feed) return;
+			window.setTimeout(continueFeedIfNeeded, 0);
 		});
 
 		document.addEventListener('wpFeedInfiniteScrollFinished', function (event) {
@@ -321,6 +339,7 @@
 		initializePosts(adapter.posts);
 		feed.classList.add('wp-seen-posts-feed');
 		document.documentElement.classList.add('wp-seen-posts-active');
+		window.setTimeout(continueFeedIfNeeded, 0);
 	}
 
 	if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });

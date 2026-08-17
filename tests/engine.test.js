@@ -27,6 +27,8 @@ async function boot(history = {}, options = {}) {
 	const { window } = dom;
 	Object.defineProperty(window.document, 'visibilityState', { value: 'visible', configurable: true });
 	window.localStorage.setItem('wp_seen_posts_v1', JSON.stringify(history));
+	let loadMoreClicks = 0;
+	window.document.querySelector('.wp-pfis-load-more').addEventListener('click', () => { loadMoreClicks += 1; });
 	const observers = [];
 	window.IntersectionObserver = class {
 		constructor(callback) { this.callback = callback; this.observed = new Set(); observers.push(this); }
@@ -52,7 +54,7 @@ async function boot(history = {}, options = {}) {
 	window.eval(engine);
 	window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
 	await new Promise((resolve) => window.setTimeout(resolve, 0));
-	return { dom, window, observer: observers[0] };
+	return { dom, window, observer: observers[0], loadMoreClicks: () => loadMoreClicks };
 }
 
 test('keeps a newly Seen card visible until it is scrolled past, then reveals it on request', async () => {
@@ -95,7 +97,7 @@ test('keeps a newly Seen card visible until it is scrolled past, then reveals it
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
 });
 
-test('initializes only supplied infinite-scroll posts and crosses an all-hidden page', async () => {
+test('initializes only supplied infinite-scroll posts without advancing while visible content remains', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const { window } = await boot({ 1: now, 3: now });
 	let clicks = 0;
@@ -111,7 +113,7 @@ test('initializes only supplied infinite-scroll posts and crosses an all-hidden 
 	await new Promise((resolve) => window.setTimeout(resolve, 5));
 	assert.equal(added.dataset.seenPostInitialized, 'true');
 	assert.equal(added.classList.contains('wp-seen-posts-is-hidden'), true);
-	assert.equal(clicks, 1);
+	assert.equal(clicks, 0);
 });
 
 test('allows half a viewport to qualify an exceptionally tall post', async () => {
@@ -140,6 +142,14 @@ test('shows a compact caught-up status only after the feed is truly exhausted', 
 	await new Promise((resolve) => window.setTimeout(resolve, 5));
 	assert.equal(empty.hidden, false);
 	assert.equal(empty.textContent, "You're all caught up.");
+});
+
+test('automatically advances an initially all-Seen page when more pages exist', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const { window, loadMoreClicks } = await boot({ 1: now, 2: now }, { hasMorePages: true });
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
+	assert.equal(window.document.querySelector('.wp-seen-posts-empty').hidden, true);
+	assert.equal(loadMoreClicks(), 1);
 });
 
 test('reset clears only Seen history and re-observes loaded cards', async () => {

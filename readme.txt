@@ -20,6 +20,7 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Batches collapses and preserves the visible reading position to prevent mobile scroll jumps.
 * Keeps the two most recently Seen posts expanded before older Seen posts collapse.
 * Shows one compact caught-up status only when no more archive pages remain.
+* Automatically skips fully Seen pages through the companion infinite-scroll control.
 * Hides previously Seen posts on later page loads.
 * Stores anonymous history only in localStorage, with age and size pruning.
 * Supports P2 and P2 Resurrected automatically.
@@ -47,6 +48,7 @@ The supplied `posts` collection is initialized directly; the existing feed is no
 
 = 1.0.2 =
 * Removes the duplicate empty-state action and only shows a compact caught-up status after pagination is exhausted.
+* Prevents blank feeds by automatically advancing past pages whose posts are all already Seen.
 
 = 1.0.1 =
 * Made Seen detection more responsive: 50% visibility for 750 milliseconds.
