@@ -44,10 +44,6 @@
 	display: none !important;
 }
 
-.wp-seen-posts-feed {
-	overflow-anchor: none;
-}
-
 .wp-seen-posts-position-context {
 	position: relative;
 }

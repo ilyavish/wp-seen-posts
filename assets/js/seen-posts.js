@@ -14,11 +14,6 @@
 		return Math.min(1, Math.max(0.05, safeNumber(config.threshold, 0.5)));
 	}
 
-	function nonNegativeInteger(value, fallback) {
-		value = Number(value);
-		return Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
-	}
-
 	function observerThresholds(maximum) {
 		var thresholds = [0];
 		var step = 0.05;
@@ -65,13 +60,8 @@
 		var history = prune(readHistory());
 		var historyAtLoad = new Set(Object.keys(history));
 		var sessionSeen = new Set();
-		var sessionSeenOrder = [];
-		var recentBuffer = nonNegativeInteger(config.recentBuffer, 2);
-		var autoHiddenSession = new Set();
 		var cards = new Map();
 		var timers = new Map();
-		var pendingCollapse = new Map();
-		var collapseTimer = null;
 		var showSeen = false;
 		var hideSessionSeen = false;
 		var feedExhausted = config.hasMorePages === false;
@@ -118,7 +108,7 @@
 
 		function shouldHide(id) {
 			if (showSeen) return false;
-			return historyAtLoad.has(id) || autoHiddenSession.has(id) || (hideSessionSeen && sessionSeen.has(id));
+			return historyAtLoad.has(id) || (hideSessionSeen && sessionSeen.has(id));
 		}
 
 		function applyCardVisibility(card, id) {
@@ -177,73 +167,23 @@
 			if (!fromHistory) {
 				history[id] = Math.floor(Date.now() / 1000);
 				sessionSeen.add(id);
-				sessionSeenOrder.push(id);
 				writeHistory(false);
-				if (sessionSeenOrder.length > recentBuffer) {
-					var releasedId = sessionSeenOrder[sessionSeenOrder.length - recentBuffer - 1];
-					if (cards.has(releasedId)) collapsePassedCard(cards.get(releasedId), releasedId);
-				}
 			}
+			observer.unobserve(card);
 			applyCardVisibility(card, id);
 			updateUi();
-		}
-
-		function flushCollapses() {
-			collapseTimer = null;
-			if (!pendingCollapse.size) return;
-
-			var anchor = null;
-			var anchorTop = 0;
-			cards.forEach(function (candidate) {
-				if (anchor || pendingCollapse.has(candidate) || candidate.classList.contains('wp-seen-posts-is-hidden')) return;
-				var rect = candidate.getBoundingClientRect();
-				if (rect.bottom > 0 && rect.top < window.innerHeight) {
-					anchor = candidate;
-					anchorTop = rect.top;
-				}
-			});
-
-			pendingCollapse.forEach(function (id, card) {
-				autoHiddenSession.add(id);
-				observer.unobserve(card);
-				applyCardVisibility(card, id);
-			});
-			pendingCollapse.clear();
-			updateUi();
-
-			if (anchor) {
-				var offset = anchor.getBoundingClientRect().top - anchorTop;
-				if (Math.abs(offset) > 0.5) window.scrollBy(0, offset);
-			}
-		}
-
-		function queueCollapse(card, id) {
-			pendingCollapse.set(card, id);
-			if (collapseTimer) window.clearTimeout(collapseTimer);
-			collapseTimer = window.setTimeout(flushCollapses, safeNumber(config.collapseDelay, 120));
-		}
-
-		function collapsePassedCard(card, id) {
-			var recentStart = Math.max(0, sessionSeenOrder.length - recentBuffer);
-			var orderIndex = sessionSeenOrder.lastIndexOf(id);
-			if (orderIndex >= recentStart || !sessionSeen.has(id) || card.contains(document.activeElement) || card.getBoundingClientRect().bottom > 0) return;
-			queueCollapse(card, id);
 		}
 
 		var observer = new IntersectionObserver(function (entries) {
 			entries.forEach(function (entry) {
 				var card = entry.target;
 				var id = card.dataset.seenPostId;
-				if (card.dataset.seenPostState === 'seen') {
-					if (!entry.isIntersecting) collapsePassedCard(card, id);
-					return;
-				}
 				if (hasEnoughVisibility(entry, visibilityThreshold()) && document.visibilityState === 'visible') {
 					if (!timers.has(card)) {
 						timers.set(card, window.setTimeout(function () {
 							timers.delete(card);
 							if (document.visibilityState === 'visible' && card.dataset.seenPostState === 'unseen') setSeen(card, id, false);
-						}, safeNumber(config.dwellTime, 750)));
+						}, safeNumber(config.dwellTime, 1500)));
 					}
 				} else if (timers.has(card)) {
 					window.clearTimeout(timers.get(card));
@@ -274,9 +214,6 @@
 				if (!id) return;
 				card.dataset.seenPostInitialized = 'true';
 				card.dataset.seenPostId = id;
-				card.addEventListener('focusout', function () {
-					window.setTimeout(function () { collapsePassedCard(card, id); }, 0);
-				});
 				cards.set(id, card);
 				if (historyAtLoad.has(id)) setSeen(card, id, true);
 				else {
@@ -298,15 +235,10 @@
 		toggle.addEventListener('click', function () { setShowSeen(!showSeen); });
 		reset.addEventListener('click', function () {
 			if (!window.confirm(config.i18n.confirmReset)) return;
-			if (collapseTimer) window.clearTimeout(collapseTimer);
-			collapseTimer = null;
-			pendingCollapse.clear();
 			try { window.localStorage.removeItem(config.storageKey || 'wp_seen_posts_v1'); } catch (error) {}
 			history = {};
 			historyAtLoad.clear();
 			sessionSeen.clear();
-			sessionSeenOrder.length = 0;
-			autoHiddenSession.clear();
 			showSeen = false;
 			hideSessionSeen = false;
 			cards.forEach(function (card) {
@@ -340,11 +272,10 @@
 		});
 
 		initializePosts(adapter.posts);
-		feed.classList.add('wp-seen-posts-feed');
 		document.documentElement.classList.add('wp-seen-posts-active');
 		window.setTimeout(continueFeedIfNeeded, 0);
 	}
 
-	if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
+	if (document.readyState === 'loading' && !document.body) document.addEventListener('DOMContentLoaded', init, { once: true });
 	else init();
 }());
