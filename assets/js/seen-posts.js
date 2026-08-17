@@ -167,6 +167,8 @@
 			card.classList.add('wp-seen-posts-is-seen');
 			card.dataset.seenPostState = 'seen';
 			if (!card.querySelector(':scope > .wp-seen-posts-badge')) {
+				var cardPosition = window.getComputedStyle(card).position;
+				if (!cardPosition || cardPosition === 'static') card.classList.add('wp-seen-posts-position-context');
 				var badge = document.createElement('span');
 				badge.className = 'wp-seen-posts-badge';
 				badge.textContent = config.i18n.seen;
@@ -309,6 +311,7 @@
 			hideSessionSeen = false;
 			cards.forEach(function (card) {
 				card.classList.remove('wp-seen-posts-is-seen', 'wp-seen-posts-is-hidden');
+				card.classList.remove('wp-seen-posts-position-context');
 				card.removeAttribute('aria-hidden');
 				card.dataset.seenPostState = 'unseen';
 				var badge = card.querySelector(':scope > .wp-seen-posts-badge');

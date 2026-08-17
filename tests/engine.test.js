@@ -69,6 +69,8 @@ test('keeps a newly Seen card visible until it is scrolled past, then reveals it
 	await new Promise((resolve) => window.setTimeout(resolve, 10));
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-seen'), true);
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
+	assert.equal(newCard.classList.contains('wp-seen-posts-position-context'), true);
+	assert.equal(newCard.querySelector(':scope > .wp-seen-posts-badge').textContent, 'Seen');
 	assert.equal(JSON.parse(window.localStorage.getItem('wp_seen_posts_v1'))['2'] > 0, true);
 	assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent, 'Show seen (2)');
 
@@ -162,5 +164,6 @@ test('reset clears only Seen history and re-observes loaded cards', async () => 
 	assert.equal(window.localStorage.getItem('unrelated'), 'keep');
 	assert.equal(oldCard.dataset.seenPostState, 'unseen');
 	assert.equal(oldCard.classList.contains('wp-seen-posts-is-hidden'), false);
+	assert.equal(oldCard.classList.contains('wp-seen-posts-position-context'), false);
 	assert.equal(observer.observed.has(oldCard), true);
 });

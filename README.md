@@ -11,6 +11,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - The two most recently Seen posts remain expanded as an orientation buffer; older Seen posts collapse after they are passed.
 - A compact caught-up status appears only after pagination is genuinely exhausted; the toolbar remains the single reveal control.
 - If a loaded page contains only previously Seen posts, the companion Load More control is triggered automatically until unseen content or the true end is reached.
+- The small Seen badge is anchored to the bottom-right corner of its post card.
 - On a later page load, previously Seen cards start hidden and can be revealed.
 - Anonymous state is stored as `{ postId: unixTimestamp }` in `wp_seen_posts_v1`.
 - History defaults to 365 days and 3,000 IDs. Use `WP_SEEN_POSTS_RETENTION_DAYS`, `WP_SEEN_POSTS_MAX_ENTRIES`, or their matching filters to change the limits.

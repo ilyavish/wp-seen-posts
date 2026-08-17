@@ -48,16 +48,24 @@
 	overflow-anchor: none;
 }
 
+.wp-seen-posts-position-context {
+	position: relative;
+}
+
 .wp-seen-posts-badge {
 	background: #f0f0f1;
 	border-radius: 999px;
+	bottom: 0.5rem;
 	color: #50575e;
-	float: right;
 	font-size: 0.72rem;
 	font-weight: 600;
 	line-height: 1;
-	margin: 0.35rem;
+	margin: 0;
 	padding: 0.3rem 0.48rem;
+	pointer-events: none;
+	position: absolute;
+	right: 0.5rem;
+	z-index: 1;
 }
 
 .wp-seen-posts-empty {
