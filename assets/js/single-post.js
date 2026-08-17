@@ -73,6 +73,17 @@
 		return document.body;
 	}
 
+	function findStatusHost() {
+		var root = findPostRoot();
+		var content = root.querySelector('#content-' + postId + ', .postcontent, .entry-content, .post-content, [itemprop="articleBody"]') || root;
+		var meta = content.querySelector('.jp-post-views-single-meta');
+		if (meta) {
+			meta.classList.add('wp-seen-posts-single-meta-host');
+			return { element: meta, inline: true };
+		}
+		return { element: content, inline: false };
+	}
+
 	function closeExplanations(except) {
 		if (!status) return;
 		status.querySelectorAll('.wp-seen-posts-achievement.is-explaining').forEach(function (item) {
@@ -143,11 +154,11 @@
 	}
 
 	function renderStatus(history, unlocked) {
-		var root = findPostRoot();
-		if (!root) return;
+		var host = findStatusHost();
+		if (!host.element) return;
 		if (status) status.remove();
 		status = document.createElement('div');
-		status.className = 'wp-seen-posts-single-status';
+		status.className = 'wp-seen-posts-single-status' + (host.inline ? ' wp-seen-posts-single-status-inline' : '');
 		status.setAttribute('role', 'status');
 		status.setAttribute('aria-live', 'polite');
 		var seen = document.createElement('strong');
@@ -178,7 +189,7 @@
 			achievements.appendChild(hint);
 			status.appendChild(achievements);
 		}
-		root.appendChild(status);
+		host.element.appendChild(status);
 		if (unlocked) showUnlockToast(unlocked);
 	}
 

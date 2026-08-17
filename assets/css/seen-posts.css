@@ -222,6 +222,17 @@
 	text-align: right;
 }
 
+.wp-seen-posts-single-meta-host {
+	align-items: center !important;
+}
+
+.wp-seen-posts-single-status-inline {
+	clear: none;
+	flex: 1 1 auto;
+	margin: 0 0 0 auto;
+	min-width: 0;
+}
+
 .wp-seen-posts-single-seen {
 	background: #f0f0f1;
 	border: 1px solid #c3c4c7;
