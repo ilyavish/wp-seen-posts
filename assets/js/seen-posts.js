@@ -117,7 +117,7 @@
 		var seenCardCount = 0;
 		var hiddenCardCount = 0;
 		var showSeen = false;
-		var hideSessionSeen = false;
+		var hiddenSessionSeen = new Set();
 		var feedExhausted = config.hasMorePages === false;
 		var infiniteReady = document.documentElement.classList.contains('wp-pfis-active');
 		var writesSincePrune = 0;
@@ -219,7 +219,7 @@
 		function shouldHide(id) {
 			if (showSeen) return false;
 			if (reloadPreviewIds.has(id)) return false;
-			return historyAtLoad.has(id) || (hideSessionSeen && sessionSeen.has(id));
+			return historyAtLoad.has(id) || hiddenSessionSeen.has(id);
 		}
 
 		function applyCardVisibility(card, id) {
@@ -520,7 +520,9 @@
 		function setShowSeen(value) {
 			showSeen = value;
 			if (!value) {
-				hideSessionSeen = true;
+				/* Hide only the session posts that are already Seen at this tap. New
+				 * posts loaded afterward must remain stable until another Hide tap. */
+				sessionSeen.forEach(function (id) { hiddenSessionSeen.add(id); });
 				reloadPreviewIds.clear();
 			}
 			cards.forEach(function (card, id) {
@@ -544,11 +546,11 @@
 			historyEntryCount = 0;
 			historyAtLoad.clear();
 			sessionSeen.clear();
+			hiddenSessionSeen.clear();
 			reloadPreviewIds.clear();
 			seenCardCount = 0;
 			hiddenCardCount = 0;
 			showSeen = false;
-			hideSessionSeen = false;
 			cards.forEach(function (card) {
 				card.classList.remove('wp-seen-posts-is-seen', 'wp-seen-posts-is-hidden', 'wp-seen-posts-reload-preview');
 				card.classList.remove('wp-seen-posts-position-context');

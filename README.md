@@ -7,6 +7,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - A card becomes Seen after at least 50% is visible for 1,000 ms while the tab is visible.
 - For a post taller than the viewport, half of the viewport qualifies so long posts remain usable on phones and tablets.
 - A post that becomes Seen stays visible for the rest of the current page session, preventing scroll-time layout shifts.
+- Closing Show seen hides only posts that are already Seen at that moment; newly loaded posts remain stable until another Hide tap or page reload.
 - Seen/hidden totals use constant-time counters, and storage writes are coalesced and merged with newer tab history so large feeds remain responsive without losing direct-post visits.
 - Reloads reuse the early bootstrap's parsed history and perform no synchronous no-change localStorage write.
 - A tiny head bootstrap validates retention and size limits before pre-hiding stored Seen cards during parsing, preventing both a full-feed flash and transient hiding from expired history.

@@ -294,6 +294,35 @@ test('keeps a newly Seen card visible after it is scrolled past and reveals prio
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
 });
 
+test('does not hide posts that become Seen after Show seen is closed', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const { window, observer } = await boot({ 1: now }, { postCount: 2, hasMorePages: true });
+	const secondCard = window.document.querySelector('#prologue-2');
+	observer.trigger(secondCard, 0.5);
+	await new Promise((resolve) => window.setTimeout(resolve, 10));
+
+	const toggle = window.document.querySelector('.wp-seen-posts-toggle');
+	toggle.click();
+	toggle.click();
+	assert.equal(secondCard.classList.contains('wp-seen-posts-is-hidden'), true);
+
+	const thirdCard = window.document.createElement('li');
+	thirdCard.id = 'prologue-3';
+	thirdCard.className = 'post post-3';
+	thirdCard.textContent = 'Post 3';
+	window.document.querySelector('#postlist').appendChild(thirdCard);
+	window.document.dispatchEvent(new window.CustomEvent('wpFeedPostsAdded', {
+		detail: { container: window.document.querySelector('#postlist'), posts: [thirdCard] }
+	}));
+	await new Promise((resolve) => window.setTimeout(resolve, 0));
+	observer.trigger(thirdCard, 0.5);
+	await new Promise((resolve) => window.setTimeout(resolve, 10));
+
+	assert.equal(thirdCard.dataset.seenPostState, 'seen');
+	assert.equal(thirdCard.classList.contains('wp-seen-posts-is-hidden'), false);
+	assert.equal(thirdCard.getAttribute('aria-hidden'), 'false');
+});
+
 test('unlocks the beer milestone beside Seen with a brief, explained achievement', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const { window, observer } = await boot({ 1: now, 2: now, 3: now, 4: now }, { postCount: 5 });
