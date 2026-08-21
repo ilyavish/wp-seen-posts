@@ -15,7 +15,8 @@ function strings() {
 		showSeen: 'Show seen', hideSeen: 'Hide seen', seen: 'Seen', reset: 'Reset seen history',
 		confirmReset: 'Reset?', loadingUnseen: 'Loading unseen posts…', findingUnseen: 'Finding unseen posts…', noUnseenPage: 'No unseen posts on this page.',
 		caughtUp: "You're all caught up.", achievements: 'Your badges',
-		badgeHint: 'Tap a badge to see why you earned it.', achievementUnlocked: 'Achievement unlocked!'
+		badgeHint: 'Tap a badge to see how it unlocks.', badgeLocked: 'Locked. See %1$d posts to unlock %2$s.',
+		achievementUnlocked: 'Achievement unlocked!'
 	};
 }
 
@@ -376,12 +377,16 @@ test('unlocks the beer milestone beside Seen with a brief, explained achievement
 	const now = Math.floor(Date.now() / 1000);
 	const { window, observer } = await boot({ 1: now, 2: now, 3: now, 4: now }, { postCount: 5 });
 	const achievements = window.document.querySelector('.wp-seen-posts-achievements');
-	assert.equal(achievements.hidden, true);
+	assert.equal(achievements.hidden, false);
+	assert.equal(achievements.querySelectorAll('.wp-seen-posts-achievement-locked').length, 5);
+	assert.equal(achievements.querySelector('[data-badge-key="beer"] .wp-seen-posts-achievement-tooltip').textContent, 'Locked. See 5 posts to unlock Beer badge.');
 	const fifth = window.document.querySelector('#prologue-5');
 	observer.trigger(fifth, 0.5);
 	await new Promise((resolve) => window.setTimeout(resolve, 10));
 	assert.equal(achievements.hidden, false);
-	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer']);
+	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer', 'vodka', 'barsetka', 'gopnik', 'bmw']);
+	assert.equal(achievements.querySelector('[data-badge-key="beer"]').dataset.badgeState, 'earned');
+	assert.equal(achievements.querySelector('[data-badge-key="vodka"]').dataset.badgeState, 'locked');
 	assert.equal(achievements.querySelector('img').src, 'https://example.com/badges/beer.png');
 	assert.equal(achievements.querySelector('img').alt, 'Cute beer badge');
 	assert.equal(achievements.querySelector('.wp-seen-posts-achievement-tooltip').textContent, 'You earned the Beer badge for seeing 5 posts.');
@@ -412,8 +417,9 @@ test('accumulates earned milestones and keeps Seen beside the highest badge on c
 		assert.equal(badge.querySelector('img').src, 'https://example.com/badges/bmw.png');
 	});
 	window.document.querySelector('.wp-seen-posts-reset').click();
-	assert.equal(achievements.hidden, true);
-	assert.equal(achievements.querySelector('.wp-seen-posts-achievements-list').children.length, 0);
+	assert.equal(achievements.hidden, false);
+	assert.equal(achievements.querySelector('.wp-seen-posts-achievements-list').children.length, 5);
+	assert.equal(achievements.querySelectorAll('.wp-seen-posts-achievement-locked').length, 5);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
 });
 

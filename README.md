@@ -18,10 +18,10 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - If a reload would otherwise contain no visible cards, two recent Seen cards remain as a stable preview while unseen pages load, avoiding both blank waits and live removal.
 - If that background search takes longer than 500 ms, a compact fixed “Finding unseen posts…” status appears without changing the feed height; fast loads never flash it.
 - The small Seen badge is anchored to the bottom-right corner of its post card and keeps the Seen word visible beside the visitor's highest earned badge.
-- At 5, 10, 20, 50, and 100 unique Seen posts, visitors accumulate beer, vodka, barsetka waist bag, gopnik, and Black BMW achievement icons in a light badge shelf aligned opposite the feed buttons.
+- The top badge shelf always shows the 5, 10, 20, 50, and 100-post beer, vodka, barsetka waist bag, gopnik, and Black BMW roadmap; locked badges are muted in grayscale and earned badges switch to full color.
 - Badge images have descriptive alternative text. Desktop hover/focus and mobile taps show a custom explanation below the badge so P2 and Safari cannot clip it above the feed.
 - A newly unlocked milestone gets one short badge-pop animation and a compact explanatory toast, with motion disabled when the visitor requests reduced motion.
-- Pixel-art badge artwork is bundled locally at a maximum 96 px, loaded only when earned, and uses versioned URLs so browsers cache it while plugin upgrades reliably refresh it.
+- Pixel-art badge artwork is bundled locally at a maximum 96 px; the five small roadmap images load once at the top and use versioned URLs for reliable long-lived browser caching.
 - On the next page load, previously Seen cards start hidden and can be revealed; the two-card preview is used only when hiding everything would leave the feed empty.
 - Individual blog posts opened directly are recorded after one visible second and visibly show Seen plus earned badges inside the detected views row, right-aligned across from the view count and before newsletters or comments; WordPress pages are never tracked by default.
 - Every rendered post includes a small, accessible eye counter for its public lifetime Seen total. It sits beside the personal Seen badge in one bottom-right status cluster, updates immediately at the local Seen transition, and reconciles to the confirmed server total.
@@ -32,7 +32,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - History defaults to 365 days and 3,000 IDs. Use `WP_SEEN_POSTS_RETENTION_DAYS`, `WP_SEEN_POSTS_MAX_ENTRIES`, or their matching filters to change the limits.
 - The server archive query remains untouched and cacheable. Cached HTML may show a slightly stale count until a visitor's own confirmed increment updates it.
 - Full post markup remains server-rendered; hiding is a visitor-side interaction and does not remove content from the HTML response used by search engines.
-- Achievement artwork is bundled as five optimized 96×96 transparent PNGs and only earned images are loaded.
+- Achievement artwork is bundled as five optimized 96×96 transparent PNGs; post cards and single posts still render earned badges only.
 - Feed controls retain 44 px touch targets even under P2 Resurrected's more specific button rules.
 
 ## Supported markup

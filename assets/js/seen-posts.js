@@ -199,7 +199,7 @@
 		achievementsList.setAttribute('role', 'list');
 		var achievementsHint = document.createElement('span');
 		achievementsHint.className = 'wp-seen-posts-achievements-hint';
-		achievementsHint.textContent = config.i18n.badgeHint || 'Tap a badge to see why you earned it.';
+		achievementsHint.textContent = config.i18n.badgeHint || 'Tap a badge to see how it unlocks.';
 		actions.appendChild(toggle);
 		actions.appendChild(reset);
 		controls.appendChild(actions);
@@ -280,21 +280,29 @@
 			});
 		}
 
-		function createAchievementItem(milestone, animate) {
+		function lockedAchievementDescription(milestone) {
+			return (config.i18n.badgeLocked || 'Locked. See %1$d posts to unlock %2$s.')
+				.replace('%1$d', String(milestone.threshold))
+				.replace('%2$s', milestone.label);
+		}
+
+		function createAchievementItem(milestone, animate, earned) {
 			var item = document.createElement('span');
-			item.className = 'wp-seen-posts-achievement' + (animate ? ' wp-seen-posts-achievement-unlocked' : '');
+			item.className = 'wp-seen-posts-achievement wp-seen-posts-achievement-' + (earned ? 'earned' : 'locked') + (animate ? ' wp-seen-posts-achievement-unlocked' : '');
 			item.dataset.badgeKey = milestone.key;
+			item.dataset.badgeState = earned ? 'earned' : 'locked';
 			item.setAttribute('role', 'listitem');
 			var button = document.createElement('button');
 			button.type = 'button';
 			button.className = 'wp-seen-posts-achievement-button';
-			button.setAttribute('aria-label', milestone.description);
+			var description = earned ? milestone.description : lockedAchievementDescription(milestone);
+			button.setAttribute('aria-label', description);
 			button.setAttribute('aria-expanded', 'false');
 			var tooltip = document.createElement('span');
 			tooltip.className = 'wp-seen-posts-achievement-tooltip';
 			tooltip.id = 'wp-seen-posts-tooltip-' + milestone.key;
 			tooltip.setAttribute('role', 'tooltip');
-			tooltip.textContent = milestone.description;
+			tooltip.textContent = description;
 			button.setAttribute('aria-describedby', tooltip.id);
 			button.appendChild(createMilestoneImage(milestone, 'wp-seen-posts-achievement-image', 36));
 			button.addEventListener('click', function (event) {
@@ -344,13 +352,14 @@
 			var newlyEarned = achievementsInitialized ? earned.filter(function (milestone) {
 				return previousKeys.indexOf(milestone.key) === -1;
 			}) : [];
-			if (signature !== achievementSignature) {
+			if (!achievementsInitialized || signature !== achievementSignature) {
 				achievementSignature = signature;
 				while (achievementsList.firstChild) achievementsList.removeChild(achievementsList.firstChild);
-				earned.forEach(function (milestone) {
-					achievementsList.appendChild(createAchievementItem(milestone, newlyEarned.indexOf(milestone) !== -1));
+				milestones.forEach(function (milestone) {
+					var isEarned = historyEntryCount >= milestone.threshold;
+					achievementsList.appendChild(createAchievementItem(milestone, isEarned && newlyEarned.indexOf(milestone) !== -1, isEarned));
 				});
-				achievements.hidden = earned.length === 0;
+				achievements.hidden = milestones.length === 0;
 			}
 			achievementsInitialized = true;
 			if (newlyEarned.length) showMilestoneToast(newlyEarned[newlyEarned.length - 1]);

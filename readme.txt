@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.4
+Stable tag: 1.1.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -28,6 +28,7 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Batches newly Seen post IDs into small anonymous REST writes and updates counters only after confirmed responses.
 * Stores only lifetime and site-local daily aggregates, with no visitor profiles or raw view events.
 * Unlocks locally bundled beer, vodka, barsetka waist bag, gopnik, and Black BMW badges at 5, 10, 20, 50, and 100 unique Seen posts.
+* Keeps future badges visibly grayed out in the top badge shelf as an unlock roadmap; post cards and single posts continue to show earned badges only.
 * Explains badges on hover, keyboard focus, and mobile tap, with descriptive image text and a short reduced-motion-safe unlock celebration.
 * Stores anonymous history only in localStorage, with age and size pruning.
 * Supports P2 and P2 Resurrected automatically.
@@ -52,6 +53,10 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.1.5 =
+* Keeps all milestones visible in the top badge shelf, with locked badges muted in grayscale and earned badges in full color.
+* Explains each locked badge's post requirement on hover, keyboard focus, or mobile tap without adding locked badges to posts.
 
 = 1.1.4 =
 * Uses the WordPress Dashicons visibility eye associated with Post Views Counter while keeping it inline and request-free.
