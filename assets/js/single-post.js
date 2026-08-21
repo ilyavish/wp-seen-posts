@@ -3,6 +3,7 @@
 
 	var config = window.wpSeenSinglePostConfig || {};
 	var i18n = config.i18n || {};
+	var publicCounts = window.WPSeenPublicCounts;
 	var postId = String(Math.floor(Number(config.postId) || 0));
 	if (!/^[1-9]\d*$/.test(postId)) return;
 
@@ -214,10 +215,11 @@
 				});
 			}
 		} catch (error) {}
+		if (wasNew && publicCounts && typeof publicCounts.queue === 'function') publicCounts.queue(postId);
 		recorded = true;
 		renderStatus(history, unlocked);
 		document.dispatchEvent(new window.CustomEvent('wpSeenSinglePostRecorded', {
-			detail: { postId: postId, total: Object.keys(history).length, unlocked: unlocked ? unlocked.key : '' }
+			detail: { postId: postId, total: Object.keys(history).length, unlocked: unlocked ? unlocked.key : '', wasNew: wasNew }
 		}));
 	}
 

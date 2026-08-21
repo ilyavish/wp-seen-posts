@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks posts viewed in archive feeds, hides previously seen posts on later visits, and integrates with progressive infinite scrolling.
- * Version:           1.0.22
+ * Version:           1.1.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,10 +18,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.0.22';
+const VERSION = '1.1.0';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
+require_once __DIR__ . '/includes/class-public-counts.php';
 
 /**
  * Whether Seen Posts should enhance this front-end request.
@@ -148,11 +149,32 @@ function enqueue_assets(): void {
 		VERSION
 	);
 
+	wp_enqueue_script(
+		'wp-seen-posts-public-counts',
+		plugins_url( 'assets/js/public-counts.js', __FILE__ ),
+		array(),
+		VERSION,
+		true
+	);
+	wp_add_inline_script(
+		'wp-seen-posts-public-counts',
+		'window.wpSeenPublicCountsConfig = ' . wp_json_encode(
+			array(
+				'endpoint'      => rest_url( Public_Counts::REST_NAMESPACE . Public_Counts::REST_ROUTE ),
+				'maxBatchSize'  => Public_Counts::MAX_BATCH_SIZE,
+				'batchDelay'    => 1200,
+				'labelSingular' => __( 'Seen by %s visitor', 'wp-seen-posts' ),
+				'labelPlural'   => __( 'Seen by %s visitors', 'wp-seen-posts' ),
+			)
+		) . ';',
+		'before'
+	);
+
 	if ( $single_view ) {
 		wp_enqueue_script(
 			'wp-seen-posts-single',
 			plugins_url( 'assets/js/single-post.js', __FILE__ ),
-			array(),
+			array( 'wp-seen-posts-public-counts' ),
 			VERSION,
 			true
 		);
@@ -204,7 +226,7 @@ function enqueue_assets(): void {
 	wp_enqueue_script(
 		'wp-seen-posts',
 		plugins_url( 'assets/js/seen-posts.js', __FILE__ ),
-		array( 'wp-seen-posts-adapters' ),
+		array( 'wp-seen-posts-adapters', 'wp-seen-posts-public-counts' ),
 		VERSION,
 		true
 	);
@@ -276,9 +298,17 @@ add_action( 'wp_enqueue_scripts', __NAMESPACE__ . '\\enqueue_assets', 110 );
 /** Load translations and the small settings screen. */
 function bootstrap(): void {
 	load_plugin_textdomain( 'wp-seen-posts', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+	Public_Counts::maybe_upgrade_schema();
+	Public_Counts::init();
 
 	if ( is_admin() ) {
 		Settings::init();
 	}
 }
 add_action( 'plugins_loaded', __NAMESPACE__ . '\\bootstrap' );
+
+/** Create the aggregate counter schema when the plugin is activated. */
+function activate(): void {
+	Public_Counts::install_schema();
+}
+register_activation_hook( __FILE__, __NAMESPACE__ . '\\activate' );

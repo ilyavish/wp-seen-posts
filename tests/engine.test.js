@@ -62,6 +62,7 @@ async function boot(history = {}, options = {}) {
 		}
 	};
 	window.WPSeenPostsAdapters = adapters;
+	if (options.publicCounts) window.WPSeenPublicCounts = options.publicCounts;
 	window.wpSeenPostsConfig = {
 		theme: 'p2', selectors: {}, storageKey: 'wp_seen_posts_v1', threshold: 0.5,
 		dwellTime: 5, hasMorePages: options.hasMorePages ?? false,
@@ -230,6 +231,35 @@ test('coalesces simultaneous Seen history writes', async () => {
 	await new Promise((resolve) => window.setTimeout(resolve, 15));
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-seen').length, 3);
 	assert.equal(historyWrites, 1);
+});
+
+test('queues a public increment only for a new local Unseen to Seen transition', async () => {
+	const queued = [];
+	const now = Math.floor(Date.now() / 1000);
+	const { window, observer } = await boot({ 1: now }, {
+		postCount: 2,
+		reloadPreviewCount: 0,
+		publicCounts: { queue: (id) => queued.push(id), register: () => {} }
+	});
+	observer.trigger(window.document.querySelector('#prologue-2'), 0.5);
+	await new Promise((resolve) => window.setTimeout(resolve, 15));
+	assert.deepEqual(queued, ['2']);
+	assert.equal(window.document.querySelector('#prologue-1').classList.contains('wp-seen-posts-is-seen'), true);
+});
+
+test('cancels both local Seen and public counting when a card leaves before the dwell', async () => {
+	const queued = [];
+	const { window, observer } = await boot({}, {
+		postCount: 1,
+		publicCounts: { queue: (id) => queued.push(id), register: () => {} }
+	});
+	const card = window.document.querySelector('#prologue-1');
+	observer.trigger(card, 0.5);
+	observer.trigger(card, 0, -1);
+	await new Promise((resolve) => window.setTimeout(resolve, 15));
+	assert.equal(card.dataset.seenPostState, 'unseen');
+	assert.deepEqual(queued, []);
+	assert.equal(window.localStorage.getItem('wp_seen_posts_v1'), '{}');
 });
 
 test('merges a post recorded in another tab before writing feed history', async () => {

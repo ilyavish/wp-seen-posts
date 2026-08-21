@@ -24,9 +24,13 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - Pixel-art badge artwork is bundled locally at a maximum 96 px, loaded only when earned, and uses versioned URLs so browsers cache it while plugin upgrades reliably refresh it.
 - On the next page load, previously Seen cards start hidden and can be revealed; the two-card preview is used only when hiding everything would leave the feed empty.
 - Individual blog posts opened directly are recorded after one visible second and visibly show Seen plus earned badges inside the detected views row, right-aligned across from the view count and before newsletters or comments; WordPress pages are never tracked by default.
+- Every rendered post includes a small, accessible eye counter for its public lifetime Seen total. Initial values are server-rendered from one batched query and successful new counts update in place.
+- A new local Unseen-to-Seen transition queues its post ID for one anonymous batched REST increment; existing local history is never retroactively submitted.
+- Aggregate storage uses one lifetime row per post and one daily row per active post/site-local date. It stores no IP addresses, visitor IDs, fingerprints, referrers, or individual view events.
+- Daily aggregation uses the WordPress site timezone and indexed atomic upserts, leaving the data ready for future Today, date-range, Trending, and Rising rankings.
 - Anonymous state is stored as `{ postId: unixTimestamp }` in `wp_seen_posts_v1`.
 - History defaults to 365 days and 3,000 IDs. Use `WP_SEEN_POSTS_RETENTION_DAYS`, `WP_SEEN_POSTS_MAX_ENTRIES`, or their matching filters to change the limits.
-- The server archive query remains untouched and cacheable.
+- The server archive query remains untouched and cacheable. Cached HTML may show a slightly stale count until a visitor's own confirmed increment updates it.
 - Full post markup remains server-rendered; hiding is a visitor-side interaction and does not remove content from the HTML response used by search engines.
 - Achievement artwork is bundled as five optimized 96×96 transparent PNGs and only earned images are loaded.
 - Feed controls retain 44 px touch targets even under P2 Resurrected's more specific button rules.

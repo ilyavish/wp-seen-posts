@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.22
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,9 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Places the Seen label and highest earned badge together in the bottom-right corner of each post card.
 * Hides previously Seen posts on the next page load.
 * Records individual blog posts as Seen after a one-second visible visit, then shows Seen and earned badges at the end of the post; WordPress pages are not tracked.
+* Displays a lightweight public lifetime Seen counter with an inline eye icon on feed and single-post views.
+* Batches newly Seen post IDs into small anonymous REST writes and updates counters only after confirmed responses.
+* Stores only lifetime and site-local daily aggregates, with no visitor profiles or raw view events.
 * Unlocks locally bundled beer, vodka, barsetka waist bag, gopnik, and Black BMW badges at 5, 10, 20, 50, and 100 unique Seen posts.
 * Explains badges on hover, keyboard focus, and mobile tap, with descriptive image text and a short reduced-motion-safe unlock celebration.
 * Stores anonymous history only in localStorage, with age and size pruning.
@@ -49,6 +52,12 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.1.0 =
+* Adds an accessible public lifetime Seen counter using a lightweight inline eye icon.
+* Adds atomic batched lifetime and site-timezone daily aggregate storage for future ranking features.
+* Integrates public increments only with new local Unseen-to-Seen transitions on feeds, infinite-scroll posts, and direct post views.
+* Keeps cached pages compatible by server-rendering counts in one batched read and updating only confirmed new counts in the browser.
 
 = 1.0.22 =
 * Prevents newly loaded posts from disappearing after a visitor closes Show seen; only posts already Seen at that tap are hidden.

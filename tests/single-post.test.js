@@ -49,6 +49,7 @@ async function bootSingle(history = {}, options = {}) {
 			achievementUnlocked: 'Achievement unlocked!'
 		}
 	};
+	if (options.publicCounts) window.WPSeenPublicCounts = options.publicCounts;
 	let recordedDetail = null;
 	window.document.addEventListener('wpSeenSinglePostRecorded', (event) => { recordedDetail = event.detail; });
 	window.eval(tracker);
@@ -99,6 +100,20 @@ test('does not rewrite history when the single post was already Seen', async () 
 	assert.equal(writes(), 0);
 	assert.equal(recordedId(), '7');
 	assert.equal(window.document.querySelector('.wp-seen-posts-single-seen').textContent, 'Seen');
+});
+
+test('queues a direct-post public increment once but never for existing local history', async () => {
+	const queued = [];
+	const fresh = await bootSingle({}, { publicCounts: { queue: (id) => queued.push(id) } });
+	await new Promise((resolve) => fresh.window.setTimeout(resolve, 10));
+	assert.deepEqual(queued, ['7']);
+	assert.equal(fresh.recordedDetail().wasNew, true);
+
+	const existingQueued = [];
+	const existing = await bootSingle({ 7: Math.floor(Date.now() / 1000) }, { publicCounts: { queue: (id) => existingQueued.push(id) } });
+	await new Promise((resolve) => existing.window.setTimeout(resolve, 10));
+	assert.deepEqual(existingQueued, []);
+	assert.equal(existing.recordedDetail().wasNew, false);
 });
 
 test('enforces the history size limit when a single post is added', async () => {

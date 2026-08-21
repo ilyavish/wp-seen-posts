@@ -3,6 +3,7 @@
 
 	var config = window.wpSeenPostsConfig || {};
 	var adapters = window.WPSeenPostsAdapters;
+	var publicCounts = window.WPSeenPublicCounts;
 	if (!adapters || !('IntersectionObserver' in window)) return;
 
 	function safeNumber(value, fallback) {
@@ -442,17 +443,24 @@
 		}
 
 		function setSeen(card, id, fromHistory, deferUi) {
+			var wasNew = false;
 			if (card.dataset.seenPostState !== 'seen') seenCardCount += 1;
 			card.classList.add('wp-seen-posts-is-seen');
 			card.dataset.seenPostState = 'seen';
 			if (!fromHistory) {
-				if (!Object.prototype.hasOwnProperty.call(history, id)) historyEntryCount += 1;
+				if (!Object.prototype.hasOwnProperty.call(history, id)) {
+					historyEntryCount += 1;
+					wasNew = true;
+				}
 				var seenAt = Math.floor(Date.now() / 1000);
 				history[id] = seenAt;
 				pendingHistory[id] = seenAt;
 				sessionSeen.add(id);
 				scheduleHistoryWrite();
 			}
+			/* Existing browser history is never backfilled. Only the same new local
+			 * transition that marks this card Seen may enter the public batch. */
+			if (wasNew && publicCounts && typeof publicCounts.queue === 'function') publicCounts.queue(id);
 			if (!fromHistory || reloadPreviewIds.has(id)) ensureBadge(card);
 			card.classList.toggle('wp-seen-posts-reload-preview', reloadPreviewIds.has(id));
 			observer.unobserve(card);
@@ -508,6 +516,7 @@
 				card.dataset.seenPostInitialized = 'true';
 				card.dataset.seenPostId = id;
 				cards.set(id, card);
+				if (publicCounts && typeof publicCounts.register === 'function') publicCounts.register(card);
 				if (historyAtLoad.has(id)) setSeen(card, id, true, true);
 				else {
 					card.dataset.seenPostState = 'unseen';

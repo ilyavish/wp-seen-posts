@@ -238,6 +238,39 @@
 
 .wp-seen-posts-empty[hidden] { display: none; }
 
+/* Public aggregate metric: the same understated 20px eye rhythm used by CrazyFacts,
+ * with a local inline SVG so no front-end icon font or extra request is required. */
+.wp-seen-posts-public-count-wrap {
+	align-items: center;
+	display: flex;
+	justify-content: flex-start;
+	margin: 0.55rem 0 0.2rem;
+}
+
+.wp-seen-posts-public-count {
+	align-items: center;
+	color: #50575e;
+	display: inline-flex;
+	font-size: 0.78rem;
+	font-variant-numeric: tabular-nums;
+	font-weight: 500;
+	gap: 5px;
+	line-height: 1;
+	min-height: 20px;
+	white-space: nowrap;
+}
+
+.wp-seen-posts-public-eye {
+	fill: none;
+	flex: 0 0 20px;
+	height: 20px;
+	stroke: currentColor;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 1.8;
+	width: 20px;
+}
+
 .wp-seen-posts-single-status {
 	align-items: center;
 	clear: both;
