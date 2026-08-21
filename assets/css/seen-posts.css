@@ -332,6 +332,19 @@
 	width: 100%;
 }
 
+.wp-seen-posts-single-action-row {
+	clear: both;
+	gap: 0.55rem;
+	margin: 0.55rem 0 0.5rem;
+}
+
+.wp-seen-posts-single-action-row > .wpulike,
+.wp-seen-posts-single-action-row > .jp-post-views-single-meta,
+.wp-seen-posts-single-action-row > .stats_counter.sd-content {
+	float: none !important;
+	margin-bottom: 0 !important;
+}
+
 .wp-seen-posts-single-status-inline {
 	clear: none;
 	flex: 1 1 auto;

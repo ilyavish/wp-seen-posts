@@ -74,12 +74,32 @@ test('records a directly opened single post after a visible dwell', async () => 
 	assert.equal(history['7'] > 0, true);
 	assert.equal(writes(), 1);
 	assert.equal(recordedId(), '7');
-	const meta = window.document.querySelector('.stats_counter.sd-content');
-	const status = meta.querySelector(':scope > .wp-seen-posts-single-status');
+	const actionRow = window.document.querySelector('.wp-seen-posts-single-action-row');
+	const meta = actionRow.querySelector(':scope > .stats_counter.sd-content');
+	const status = actionRow.querySelector(':scope > .wp-seen-posts-single-status');
 	assert.equal(status.textContent, 'Seen');
 	assert.equal(status.classList.contains('wp-seen-posts-single-status-inline'), true);
-	assert.equal(meta.classList.contains('wp-seen-posts-single-meta-host'), true);
-	assert.equal(meta.nextElementSibling.classList.contains('subscription-block'), true);
+	assert.equal(actionRow.firstElementChild.classList.contains('wpulike'), true);
+	assert.equal(meta.nextElementSibling, status);
+	assert.equal(actionRow.classList.contains('wp-seen-posts-single-meta-host'), true);
+	assert.equal(actionRow.nextElementSibling.classList.contains('subscription-block'), true);
+	assert.equal(Boolean(status.compareDocumentPosition(window.document.querySelector('.respond-wrap')) & window.Node.DOCUMENT_POSITION_FOLLOWING), true);
+});
+
+test('keeps Seen across from Likes when the live post has no views metadata row', async () => {
+	const { window } = await bootSingle({}, {
+		markup: '<!doctype html><html><body><ul id="postlist"><li id="prologue-7" class="post hentry"><div id="content-7" class="postcontent"><p>Post body</p><div class="wpulike wpulike-heart"><button type="button">Like</button></div><div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" data-seen-post-id="7"><span class="wp-seen-posts-public-value">3</span></span></div><div class="wp-block-group subscription-block">Discover more newsletter</div></div><div class="respond-wrap">Reply form</div></li></ul></body></html>'
+	});
+	await new Promise((resolve) => window.setTimeout(resolve, 10));
+	const content = window.document.querySelector('#content-7');
+	const actionRow = content.querySelector(':scope > .wp-seen-posts-single-action-row');
+	const status = actionRow.querySelector(':scope > .wp-seen-posts-single-status');
+	assert.equal(actionRow.children[0].classList.contains('wpulike'), true);
+	assert.equal(status.children[0].classList.contains('wp-seen-posts-public-count-wrap'), true);
+	assert.equal(status.children[1].textContent, 'Seen');
+	assert.equal(actionRow.nextElementSibling.classList.contains('subscription-block'), true);
+	assert.equal(content.querySelector(':scope > .wp-seen-posts-public-count-wrap'), null);
+	assert.equal(window.document.querySelector('.subscription-block .wp-seen-posts-single-status'), null);
 	assert.equal(Boolean(status.compareDocumentPosition(window.document.querySelector('.respond-wrap')) & window.Node.DOCUMENT_POSITION_FOLLOWING), true);
 });
 

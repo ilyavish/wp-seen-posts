@@ -77,7 +77,22 @@
 	function findStatusHost() {
 		var root = findPostRoot();
 		var content = root.querySelector('#content-' + postId + ', .postcontent, .entry-content, .post-content, [itemprop="articleBody"]') || root;
+		var like = content.querySelector('.wpulike');
 		var meta = content.querySelector('.jp-post-views-single-meta, .stats_counter.sd-content');
+		if (like) {
+			var actionRow = like.parentElement && like.parentElement.classList.contains('wp-seen-posts-single-action-row')
+				? like.parentElement
+				: null;
+			if (!actionRow) {
+				actionRow = document.createElement('div');
+				actionRow.className = 'wp-seen-posts-single-action-row';
+				like.parentNode.insertBefore(actionRow, like);
+				actionRow.appendChild(like);
+			}
+			if (meta && meta.parentElement !== actionRow) actionRow.appendChild(meta);
+			actionRow.classList.add('wp-seen-posts-single-meta-host');
+			return { element: actionRow, inline: true };
+		}
 		if (meta) {
 			meta.classList.add('wp-seen-posts-single-meta-host');
 			return { element: meta, inline: true };

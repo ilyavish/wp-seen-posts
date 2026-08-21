@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.2
+Stable tag: 1.1.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,7 +23,7 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Shows “Finding unseen posts…” only when background loading behind that preview takes longer than 500 milliseconds.
 * Places the Seen label and highest earned badge together in the bottom-right corner of each post card.
 * Hides previously Seen posts on the next page load.
-* Records individual blog posts as Seen after a one-second visible visit, then shows Seen and earned badges at the end of the post; WordPress pages are not tracked.
+* Records individual blog posts as Seen after a one-second visible visit, then shows the eye total, Seen, and earned badges across from the Like control; WordPress pages are not tracked.
 * Displays a lightweight public lifetime Seen counter with an inline eye icon on feed and single-post views.
 * Batches newly Seen post IDs into small anonymous REST writes and updates counters only after confirmed responses.
 * Stores only lifetime and site-local daily aggregates, with no visitor profiles or raw view events.
@@ -52,6 +52,10 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.1.3 =
+* Anchors the single-post Seen panel directly across from the Like control, even when no separate views metadata row exists.
+* Keeps the Like/Seen action row before Jetpack's end-of-post subscription block.
 
 = 1.1.2 =
 * Groups the public eye total beside the personal Seen badge in one bottom-right status pill.
