@@ -61,6 +61,30 @@ if ( ! function_exists( 'absint' ) ) {
 	}
 }
 
+if ( ! function_exists( 'sanitize_key' ) ) {
+	function sanitize_key( $value ) {
+		return strtolower( preg_replace( '/[^a-z0-9_\-]/', '', (string) $value ) );
+	}
+}
+
+if ( ! function_exists( 'rest_ensure_response' ) ) {
+	function rest_ensure_response( $value ) {
+		return $value;
+	}
+}
+
+if ( ! class_exists( 'WP_REST_Request' ) ) {
+	class WP_REST_Request {
+		private $params;
+		public function __construct( array $params ) {
+			$this->params = $params;
+		}
+		public function get_param( $name ) {
+			return isset( $this->params[ $name ] ) ? $this->params[ $name ] : null;
+		}
+	}
+}
+
 if ( ! function_exists( 'is_wp_error' ) ) {
 	function is_wp_error( $value ) {
 		return $value instanceof WP_Error;
@@ -149,6 +173,7 @@ if ( ! $oversized instanceof WP_Error || 'wp_seen_posts_batch_too_large' !== $ov
 /** Small wpdb double proving one transaction contains both multi-row atomic upserts. */
 class WP_Seen_Posts_Test_DB {
 	public $prefix = 'test_';
+	public $posts = 'test_posts';
 	public $queries = array();
 
 	public function prepare( $sql, ...$args ) {
@@ -168,6 +193,10 @@ class WP_Seen_Posts_Test_DB {
 			array( 'post_id' => 7, 'seen_count' => 43 ),
 			array( 'post_id' => 8, 'seen_count' => 12 ),
 		);
+	}
+
+	public function get_col() {
+		return array( 7, 8 );
 	}
 }
 
@@ -193,6 +222,19 @@ if (
 	|| 'COMMIT' !== $queries[3]
 ) {
 	fwrite( STDERR, 'Atomic aggregate SQL verification failed.' . PHP_EOL );
+	exit( 1 );
+}
+
+$read_response = Public_Counts::handle_read_request(
+	new WP_REST_Request( array( 'post_ids' => array( '7', '8' ) ) )
+);
+if (
+	! is_array( $read_response )
+	|| ! isset( $read_response['counts'] )
+	|| 43 !== $read_response['counts']->{'7'}
+	|| 12 !== $read_response['counts']->{'8'}
+) {
+	fwrite( STDERR, 'Read-only aggregate response failed.' . PHP_EOL );
 	exit( 1 );
 }
 

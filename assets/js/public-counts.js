@@ -3,6 +3,10 @@
 
 	var config = window.wpSeenPublicCountsConfig || {};
 	var endpoint = typeof config.endpoint === 'string' ? config.endpoint : '';
+	var readEndpoint = typeof config.readEndpoint === 'string' ? config.readEndpoint : '';
+	var initialCounts = config.initialCounts && !Array.isArray(config.initialCounts) && typeof config.initialCounts === 'object'
+		? config.initialCounts
+		: {};
 	var maxBatchSize = Math.max(1, Math.min(50, Math.floor(Number(config.maxBatchSize) || 25)));
 	var batchDelay = Math.max(100, Math.floor(Number(config.batchDelay) || 1200));
 	var ledgerStorageKey = typeof config.ledgerStorageKey === 'string' && config.ledgerStorageKey
@@ -17,12 +21,17 @@
 	var ledgerHashCount = 7;
 	var pending = new Set();
 	var queuedThisPage = new Set();
+	var writingThisPage = new Set();
 	var optimisticOriginals = new Map();
 	var nodesById = new Map();
+	var readPending = new Set();
+	var readAttempted = new Set();
 	var flushTimer = null;
+	var readTimer = null;
 	var ledgerSaveTimer = null;
 	var ledgerDirty = false;
 	var inFlight = false;
+	var readInFlight = false;
 	var ledger = null;
 	var ledgerInitialized = false;
 	var ledgerNeedsMigration = false;
@@ -199,6 +208,62 @@
 		return state + '. ' + template.replace('%s', exactNumber(count));
 	}
 
+	function pendingLabel(node) {
+		var state = node && node.dataset.personalSeenState === 'seen'
+			? (config.personalSeen || 'Seen')
+			: (config.personalUnseen || 'Unseen');
+		return state + '. ' + (config.loadingLabel || 'Loading Seen count');
+	}
+
+	function parsedCount(value) {
+		value = String(value == null ? '' : value);
+		if (!/^\d+$/.test(value)) return null;
+		var count = Number(value);
+		return Number.isSafeInteger(count) && count >= 0 ? count : null;
+	}
+
+	function createCounter(id, count) {
+		var wrap = document.createElement('div');
+		wrap.className = 'wp-seen-posts-public-count-wrap';
+		var node = document.createElement('span');
+		node.className = 'wp-seen-posts-public-count';
+		node.setAttribute('role', 'img');
+		node.dataset.seenPostId = id;
+		node.dataset.personalSeenState = 'unseen';
+
+		var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+		svg.setAttribute('class', 'wp-seen-posts-public-eye');
+		svg.setAttribute('viewBox', '0 0 20 20');
+		svg.setAttribute('width', '20');
+		svg.setAttribute('height', '20');
+		svg.setAttribute('aria-hidden', 'true');
+		svg.setAttribute('focusable', 'false');
+		var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+		path.setAttribute('d', 'M18.3 9.5C15 4.9 8.5 3.8 3.9 7.2c-1.2.9-2.2 2.1-3 3.4.2.4.5.8.8 1.2 3.3 4.6 9.6 5.6 14.2 2.4.9-.7 1.7-1.4 2.4-2.4.3-.4.5-.8.8-1.2-.3-.4-.5-.8-.8-1.1zM10.1 7.2c.5-.5 1.3-.5 1.8 0s.5 1.3 0 1.8-1.3.5-1.8 0-.5-1.3 0-1.8zM10 14.9c-3.1 0-6-1.6-7.7-4.2C3.5 9 5.1 7.8 7 7.2c-.7.8-1 1.7-1 2.7 0 2.2 1.7 4.1 4 4.1 2.2 0 4.1-1.7 4.1-4v-.1c0-1-.4-2-1.1-2.7 1.9.6 3.5 1.8 4.7 3.5-1.7 2.6-4.6 4.2-7.7 4.2z');
+		svg.appendChild(path);
+		node.appendChild(svg);
+
+		var value = document.createElement('span');
+		value.className = 'wp-seen-posts-public-value';
+		value.setAttribute('aria-hidden', 'true');
+		if (count === null) {
+			node.dataset.seenCountPending = 'true';
+			value.textContent = '…';
+			var loading = pendingLabel(node);
+			node.setAttribute('aria-label', loading);
+			node.title = loading;
+		} else {
+			node.dataset.seenCount = String(count);
+			value.textContent = formatCompact(count);
+			var label = accessibleLabel(count, node);
+			node.setAttribute('aria-label', label);
+			node.title = label;
+		}
+		node.appendChild(value);
+		wrap.appendChild(node);
+		return wrap;
+	}
+
 	function rememberNode(node) {
 		if (!node || node.nodeType !== 1) return;
 		var id = validId(node.dataset.seenPostId);
@@ -207,8 +272,8 @@
 		node.classList.toggle('wp-seen-posts-public-count-is-seen', node.dataset.personalSeenState === 'seen');
 		if (!nodesById.has(id)) nodesById.set(id, new Set());
 		nodesById.get(id).add(node);
-		var current = Number(node.dataset.seenCount);
-		if (Number.isSafeInteger(current) && current >= 0) {
+		var current = parsedCount(node.dataset.seenCount);
+		if (current !== null) {
 			var label = accessibleLabel(current, node);
 			node.setAttribute('aria-label', label);
 			node.title = label;
@@ -223,6 +288,25 @@
 		}
 	}
 
+	function ensure(root, postId) {
+		var id = validId(postId);
+		if (!root || root.nodeType !== 1 || !id) return null;
+		var existing = root.matches('.wp-seen-posts-public-count-wrap')
+			? root
+			: root.querySelector('.wp-seen-posts-public-count-wrap');
+		if (existing) {
+			register(existing);
+			return existing;
+		}
+
+		var count = Object.prototype.hasOwnProperty.call(initialCounts, id) ? parsedCount(initialCounts[id]) : null;
+		var wrap = createCounter(id, count);
+		root.appendChild(wrap);
+		register(wrap);
+		if (count === null) requestRead(id);
+		return wrap;
+	}
+
 	function update(id, count) {
 		id = validId(id);
 		count = Number(count);
@@ -235,6 +319,7 @@
 			var value = node.querySelector('.wp-seen-posts-public-value');
 			if (value) value.textContent = formatCompact(count);
 			node.dataset.seenCount = String(count);
+			delete node.dataset.seenCountPending;
 			var label = accessibleLabel(count, node);
 			node.setAttribute('aria-label', label);
 			node.title = label;
@@ -252,9 +337,8 @@
 			rememberNode(node);
 			node.dataset.personalSeenState = seen ? 'seen' : 'unseen';
 			node.classList.toggle('wp-seen-posts-public-count-is-seen', Boolean(seen));
-			var count = Number(node.dataset.seenCount);
-			if (!Number.isSafeInteger(count) || count < 0) count = 0;
-			var label = accessibleLabel(count, node);
+			var count = parsedCount(node.dataset.seenCount);
+			var label = count === null ? pendingLabel(node) : accessibleLabel(count, node);
 			node.setAttribute('aria-label', label);
 			node.title = label;
 		});
@@ -265,10 +349,73 @@
 		var value = null;
 		nodesById.get(id).forEach(function (node) {
 			if (value !== null || !node.isConnected) return;
-			var parsed = Number(node.dataset.seenCount);
-			if (Number.isSafeInteger(parsed) && parsed >= 0) value = parsed;
+			var parsed = parsedCount(node.dataset.seenCount);
+			if (parsed !== null) value = parsed;
 		});
 		return value;
+	}
+
+	function hasPendingNode(id) {
+		if (!nodesById.has(id)) return false;
+		var pendingNode = false;
+		nodesById.get(id).forEach(function (node) {
+			if (node.isConnected && node.dataset.seenCountPending === 'true') pendingNode = true;
+		});
+		return pendingNode;
+	}
+
+	function requestRead(postId, retry) {
+		var id = validId(postId);
+		if (!id || !readEndpoint || typeof window.fetch !== 'function' || writingThisPage.has(id)) return;
+		if (retry) readAttempted.delete(id);
+		if (readAttempted.has(id) || readPending.has(id)) return;
+		readPending.add(id);
+		if (readTimer || readInFlight) return;
+		readTimer = window.setTimeout(function () {
+			readTimer = null;
+			flushReads();
+		}, 0);
+	}
+
+	function takeReadBatch() {
+		var ids = Array.from(readPending).slice(0, maxBatchSize);
+		ids.forEach(function (id) {
+			readPending.delete(id);
+			readAttempted.add(id);
+		});
+		return ids;
+	}
+
+	function flushReads() {
+		if (readInFlight || !readPending.size || !readEndpoint || typeof window.fetch !== 'function') return Promise.resolve();
+		var ids = takeReadBatch();
+		readInFlight = true;
+		return window.fetch(readEndpoint, {
+			method: 'POST',
+			credentials: 'same-origin',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ post_ids: ids })
+		}).then(function (response) {
+			if (!response || !response.ok) throw new Error('Seen count read failed');
+			return response.json();
+		}).then(function (data) {
+			if (!data || typeof data.counts !== 'object' || Array.isArray(data.counts)) return;
+			ids.forEach(function (id) {
+				if (writingThisPage.has(id) || !Object.prototype.hasOwnProperty.call(data.counts, id)) return;
+				var count = parsedCount(data.counts[id]);
+				if (count !== null) update(id, count);
+			});
+		}).catch(function () {
+			/* A missing cosmetic total must never interfere with Seen tracking. */
+		}).finally(function () {
+			readInFlight = false;
+			if (readPending.size) {
+				readTimer = window.setTimeout(function () {
+					readTimer = null;
+					flushReads();
+				}, 0);
+			}
+		});
 	}
 
 	function rollback(ids) {
@@ -276,6 +423,14 @@
 			if (!optimisticOriginals.has(id)) return;
 			update(id, optimisticOriginals.get(id));
 			optimisticOriginals.delete(id);
+		});
+	}
+
+	function failWrites(ids) {
+		rollback(ids);
+		ids.forEach(function (id) {
+			writingThisPage.delete(id);
+			if (hasPendingNode(id)) requestRead(id, true);
 		});
 	}
 
@@ -295,19 +450,19 @@
 
 	function validateResponse(data, requestedIds) {
 		if (!data || typeof data !== 'object' || !data.counts || typeof data.counts !== 'object' || Array.isArray(data.counts)) {
-			rollback(requestedIds);
+			failWrites(requestedIds);
 			return;
 		}
 		requestedIds.forEach(function (id) {
 			if (!Object.prototype.hasOwnProperty.call(data.counts, id)) {
-				rollback([id]);
+				failWrites([id]);
 				return;
 			}
 			var count = Number(data.counts[id]);
 			if (Number.isSafeInteger(count) && count >= 0) {
 				update(id, count);
 				optimisticOriginals.delete(id);
-			} else rollback([id]);
+			} else failWrites([id]);
 		});
 	}
 
@@ -329,7 +484,7 @@
 		}).catch(function () {
 			/* The personal Seen state is independent and must keep working on failure.
 			 * Do not retry an ambiguous write: the server may already have committed it. */
-			rollback(ids);
+			failWrites(ids);
 		}).finally(function () {
 			inFlight = false;
 			if (pending.size) scheduleFlush();
@@ -341,6 +496,8 @@
 		if (!id || !endpoint || queuedThisPage.has(id)) return;
 		queuedThisPage.add(id);
 		if (!rememberLifetimeCount(id)) return;
+		writingThisPage.add(id);
+		readPending.delete(id);
 		var original = displayedCount(id);
 		if (original !== null) {
 			optimisticOriginals.set(id, original);
@@ -388,10 +545,12 @@
 	} else window.setTimeout(function () { ensureLedger(''); }, 50);
 
 	window.WPSeenPublicCounts = {
+		ensure: ensure,
 		queue: queue,
 		register: register,
 		setPersonalState: setPersonalState,
 		flush: flush,
+		flushReads: flushReads,
 		formatCompact: formatCompact
 	};
 }());

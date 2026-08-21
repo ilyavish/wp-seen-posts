@@ -36,7 +36,7 @@ async function boot(history = {}, options = {}) {
 		const id = index + 1;
 		const publicCounter = options.includePublicCounts !== false
 			? `<div class="postcontent">Post ${id}<div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" data-seen-post-id="${id}" data-seen-count="9"><span class="wp-seen-posts-public-value">9</span></span></div></div>`
-			: `Post ${id}`;
+			: `<div class="postcontent">Post ${id}<p class="p2-auto-read-more-wrap"><a class="p2-auto-read-more">Read more →</a></p></div>`;
 		return `<li id="prologue-${id}" class="post post-${id}">${publicCounter}</li>`;
 	}).join('');
 	const dom = new JSDOM(`<!doctype html><html><body><main id="main">
@@ -123,6 +123,27 @@ test('pre-hides stored cards before the engine takes ownership on reload', async
 	assert.equal(historyWrites, 0);
 	assert.equal(window.WPSeenPostsEarlyHide.history, null);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-prebadge').length, 0);
+});
+
+test('asks the public counter layer to restore markup stripped by Read More', async () => {
+	const ensured = [];
+	const { window } = await boot({}, {
+		postCount: 1,
+		includePublicCounts: false,
+		publicCounts: {
+			ensure(card, id) {
+				ensured.push(id);
+				const wrap = card.ownerDocument.createElement('div');
+				wrap.className = 'wp-seen-posts-public-count-wrap';
+				wrap.innerHTML = `<span class="wp-seen-posts-public-count" data-seen-post-id="${id}" data-seen-count="9"><span class="wp-seen-posts-public-value">9</span></span>`;
+				card.appendChild(wrap);
+			},
+			register() {},
+			setPersonalState() {}
+		}
+	});
+	assert.deepEqual(ensured, ['1']);
+	assert.equal(window.document.querySelector('#prologue-1 > .wp-seen-posts-card-status .wp-seen-posts-public-value').textContent, '9');
 });
 
 test('keeps the two-card preview visible before the footer engine starts', async () => {

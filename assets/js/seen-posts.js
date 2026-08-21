@@ -495,6 +495,9 @@
 				card.dataset.seenPostInitialized = 'true';
 				card.dataset.seenPostId = id;
 				cards.set(id, card);
+				/* Some P2 Read More renderers replace filtered content after WordPress
+				 * appended the server counter. Restore only genuinely missing markup. */
+				if (publicCounts && typeof publicCounts.ensure === 'function') publicCounts.ensure(card, id);
 				if (publicCounts && typeof publicCounts.register === 'function') publicCounts.register(card);
 				if (historyAtLoad.has(id)) setSeen(card, id, true, true);
 				else {

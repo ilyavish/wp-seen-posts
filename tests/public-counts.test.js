@@ -22,8 +22,10 @@ function boot(options = {}) {
 	if (options.ledger) window.localStorage.setItem('wp_seen_posts_counted_v1', options.ledger);
 	window.wpSeenPublicCountsConfig = {
 		endpoint: 'https://example.com/wp-json/wp-seen-posts/v1/counts',
+		readEndpoint: 'https://example.com/wp-json/wp-seen-posts/v1/counts/read',
 		maxBatchSize: options.maxBatchSize || 25,
 		batchDelay: 100,
+		initialCounts: options.initialCounts || {},
 		ledgerStorageKey: 'wp_seen_posts_counted_v1',
 		historyStorageKey: 'wp_seen_posts_v1',
 		labelSingular: 'Seen by %s visitor',
@@ -32,14 +34,73 @@ function boot(options = {}) {
 		personalUnseen: 'Unseen'
 	};
 	window.fetch = (url, request) => {
-		requests.push({ url, request, ids: JSON.parse(request.body).post_ids });
+		const ids = JSON.parse(request.body).post_ids;
+		const isRead = url.endsWith('/read');
+		requests.push({ url, request, ids, isRead });
+		if (options.fetchHandler) return options.fetchHandler({ url, request, ids, isRead });
 		if (options.fetchRejects) return Promise.reject(new Error('offline'));
-		const counts = options.responseCounts || Object.fromEntries(JSON.parse(request.body).post_ids.map((id) => [id, 10]));
+		const configured = isRead ? options.readResponseCounts : options.responseCounts;
+		const counts = configured || Object.fromEntries(ids.map((id) => [id, 10]));
 		return Promise.resolve({ ok: true, json: () => Promise.resolve({ counts }) });
 	};
 	window.eval(publicCounts);
 	return { window, requests };
 }
+
+test('restores a theme-stripped counter immediately from the prefetched page totals', async () => {
+	const { window, requests } = boot({
+		markup: '<article id="post-22"></article>',
+		initialCounts: { 22: 43 }
+	});
+	const card = window.document.querySelector('#post-22');
+	const wrap = window.WPSeenPublicCounts.ensure(card, 22);
+	assert.equal(wrap.parentElement, card);
+	assert.equal(wrap.querySelector('.wp-seen-posts-public-value').textContent, '43');
+	assert.equal(wrap.querySelector('.wp-seen-posts-public-count').dataset.seenCount, '43');
+	assert.equal(wrap.querySelector('.wp-seen-posts-public-count').dataset.seenCountPending, undefined);
+	await window.WPSeenPublicCounts.flushReads();
+	assert.equal(requests.length, 0);
+});
+
+test('reads, but never increments, a missing infinite-scroll counter', async () => {
+	const { window, requests } = boot({
+		markup: '<article id="post-22"></article>',
+		readResponseCounts: { 22: 43 }
+	});
+	const card = window.document.querySelector('#post-22');
+	const wrap = window.WPSeenPublicCounts.ensure(card, 22);
+	const node = wrap.querySelector('.wp-seen-posts-public-count');
+	assert.equal(node.dataset.seenCountPending, 'true');
+	assert.equal(wrap.querySelector('.wp-seen-posts-public-value').textContent, '…');
+	await window.WPSeenPublicCounts.flushReads();
+	assert.equal(requests.length, 1);
+	assert.equal(requests[0].isRead, true);
+	assert.deepEqual(requests[0].ids, ['22']);
+	assert.equal(node.dataset.seenCount, '43');
+	assert.equal(node.dataset.seenCountPending, undefined);
+	assert.equal(wrap.querySelector('.wp-seen-posts-public-value').textContent, '43');
+});
+
+test('does not let a late read overwrite a newly confirmed increment', async () => {
+	let resolveRead;
+	const { window } = boot({
+		markup: '<article id="post-22"></article>',
+		fetchHandler({ isRead }) {
+			if (!isRead) return Promise.resolve({ ok: true, json: () => Promise.resolve({ counts: { 22: 44 } }) });
+			return new Promise((resolve) => {
+				resolveRead = () => resolve({ ok: true, json: () => Promise.resolve({ counts: { 22: 43 } }) });
+			});
+		}
+	});
+	const card = window.document.querySelector('#post-22');
+	window.WPSeenPublicCounts.ensure(card, 22);
+	const read = window.WPSeenPublicCounts.flushReads();
+	window.WPSeenPublicCounts.queue(22);
+	await window.WPSeenPublicCounts.flush();
+	resolveRead();
+	await read;
+	assert.equal(card.querySelector('.wp-seen-posts-public-value').textContent, '44');
+});
 
 test('deduplicates new post IDs into one batch and applies only confirmed totals', async () => {
 	const { window, requests } = boot({

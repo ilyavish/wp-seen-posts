@@ -19,6 +19,7 @@ final class Public_Counts {
 	public const SCHEMA_VERSION_OPTION = 'wp_seen_posts_schema_version';
 	public const REST_NAMESPACE        = 'wp-seen-posts/v1';
 	public const REST_ROUTE            = '/counts';
+	public const REST_READ_ROUTE       = '/counts/read';
 	public const MAX_BATCH_SIZE        = 25;
 	public const DAILY_RETENTION_DAYS  = 400;
 	public const CLEANUP_HOOK          = 'wp_seen_posts_prune_daily';
@@ -32,9 +33,8 @@ final class Public_Counts {
 		add_action( 'rest_api_init', array( __CLASS__, 'register_rest_route' ) );
 		add_action( self::CLEANUP_HOOK, array( __CLASS__, 'cleanup_daily_counts' ) );
 		add_filter( 'the_posts', array( __CLASS__, 'prime_query_counts' ), 10, 2 );
-		/* P2 auto-Read More rewrites the_content late and discards markup appended
-		 * before truncation. Render last so full content, excerpts, and truncated
-		 * cards all receive exactly one counter. */
+		/* Render after ordinary truncation filters. Themes that replace the final
+		 * filtered value afterward are covered by the guarded JavaScript fallback. */
 		add_filter( 'the_content', array( __CLASS__, 'append_counter' ), self::RENDER_PRIORITY );
 		add_filter( 'the_excerpt', array( __CLASS__, 'append_counter' ), self::RENDER_PRIORITY );
 	}
@@ -117,6 +117,39 @@ final class Public_Counts {
 				'permission_callback' => '__return_true',
 			)
 		);
+		register_rest_route(
+			self::REST_NAMESPACE,
+			self::REST_READ_ROUTE,
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( __CLASS__, 'handle_read_request' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+	}
+
+	/**
+	 * Return existing totals without incrementing them.
+	 *
+	 * This is used only when a theme truncator removes server-rendered counter
+	 * markup from a feed card after the normal content filters have completed.
+	 *
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	public static function handle_read_request( \WP_REST_Request $request ) {
+		$post_ids = self::sanitize_batch( $request->get_param( 'post_ids' ) );
+		if ( is_wp_error( $post_ids ) ) {
+			return $post_ids;
+		}
+
+		$post_ids = self::published_post_ids( $post_ids );
+		$counts   = $post_ids ? self::fetch_counts( $post_ids, true ) : array();
+		$response = new \stdClass();
+		foreach ( $counts as $post_id => $count ) {
+			$response->{(string) $post_id} = (int) $count;
+		}
+
+		return rest_ensure_response( array( 'counts' => $response ) );
 	}
 
 	/**
@@ -278,15 +311,21 @@ final class Public_Counts {
 			return $posts;
 		}
 
+		self::counts_for_posts( $posts );
+
+		return $posts;
+	}
+
+	/** Return the request-cached totals for published posts in a query. */
+	public static function counts_for_posts( array $posts ): array {
 		$post_ids = array();
 		foreach ( $posts as $post ) {
 			if ( $post instanceof \WP_Post && 'post' === $post->post_type && 'publish' === $post->post_status ) {
 				$post_ids[] = (int) $post->ID;
 			}
 		}
-		self::fetch_counts( $post_ids );
 
-		return $posts;
+		return self::fetch_counts( $post_ids );
 	}
 
 	/** Append a server-rendered lifetime counter to supported post content or excerpts. */

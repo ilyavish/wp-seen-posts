@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.9
+Stable tag: 1.1.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -55,6 +55,10 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.1.10 =
+* Restores eye/count markup when a P2 auto-Read More renderer strips it after WordPress content filters have completed.
+* Uses the already-prefetched page totals for immediate rendering and a read-only batched endpoint for affected infinite-scroll cards; the recovery request never increments analytics.
 
 = 1.1.9 =
 * Preloads the five small badge-roadmap images in the document head on feed views so private-window and other cold-cache visits do not discover them after footer JavaScript.

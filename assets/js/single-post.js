@@ -133,7 +133,9 @@
 		status.className = 'wp-seen-posts-single-status' + (host.inline ? ' wp-seen-posts-single-status-inline' : '');
 		status.setAttribute('role', 'status');
 		status.setAttribute('aria-live', 'polite');
-		var publicCounter = findPostRoot().querySelector('.wp-seen-posts-public-count-wrap');
+		var root = findPostRoot();
+		if (publicCounts && typeof publicCounts.ensure === 'function') publicCounts.ensure(root, postId);
+		var publicCounter = root.querySelector('.wp-seen-posts-public-count-wrap');
 		if (publicCounter) {
 			publicCounter.classList.add('wp-seen-posts-public-count-inline');
 			if (publicCounter.parentElement !== status) status.appendChild(publicCounter);

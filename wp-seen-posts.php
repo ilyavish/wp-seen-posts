@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks posts viewed in archive feeds, hides previously seen posts on later visits, and integrates with progressive infinite scrolling.
- * Version:           1.1.9
+ * Version:           1.1.10
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.1.9';
+const VERSION = '1.1.10';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
@@ -156,6 +156,9 @@ function enqueue_assets(): void {
 	}
 
 	$limits = history_limits();
+	$initial_counts = $feed_view && isset( $wp_query->posts )
+		? Public_Counts::counts_for_posts( (array) $wp_query->posts )
+		: array();
 
 	wp_enqueue_style(
 		'wp-seen-posts',
@@ -176,14 +179,17 @@ function enqueue_assets(): void {
 		'window.wpSeenPublicCountsConfig = ' . wp_json_encode(
 			array(
 				'endpoint'      => rest_url( Public_Counts::REST_NAMESPACE . Public_Counts::REST_ROUTE ),
+				'readEndpoint'  => rest_url( Public_Counts::REST_NAMESPACE . Public_Counts::REST_READ_ROUTE ),
 				'maxBatchSize'  => Public_Counts::MAX_BATCH_SIZE,
 				'batchDelay'    => 100,
+				'initialCounts' => (object) $initial_counts,
 				'ledgerStorageKey' => 'wp_seen_posts_counted_v1',
 				'historyStorageKey' => 'wp_seen_posts_v1',
 				'labelSingular' => __( 'Seen by %s visitor', 'wp-seen-posts' ),
 				'labelPlural'   => __( 'Seen by %s visitors', 'wp-seen-posts' ),
 				'personalSeen'  => _x( 'Seen', 'personal post state', 'wp-seen-posts' ),
 				'personalUnseen' => _x( 'Unseen', 'personal post state', 'wp-seen-posts' ),
+				'loadingLabel'  => __( 'Loading Seen count', 'wp-seen-posts' ),
 			)
 		) . ';',
 		'before'
