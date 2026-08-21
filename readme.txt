@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.8
+Stable tag: 1.1.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -55,6 +55,10 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.1.9 =
+* Preloads the five small badge-roadmap images in the document head on feed views so private-window and other cold-cache visits do not discover them after footer JavaScript.
+* Decodes the tiny shelf icons immediately while keeping milestone-toast image decoding asynchronous.
 
 = 1.1.8 =
 * Keeps the eye/count visible on P2 cards truncated by the automatic Read More renderer.

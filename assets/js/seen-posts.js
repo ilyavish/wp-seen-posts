@@ -237,7 +237,7 @@
 			image.alt = milestone.alt || milestone.label;
 			image.width = size;
 			image.height = size;
-			image.decoding = 'async';
+			image.decoding = className === 'wp-seen-posts-achievement-image' ? 'sync' : 'async';
 			return image;
 		}
 

@@ -403,6 +403,7 @@ test('unlocks the beer milestone in the top shelf with a brief, explained achiev
 	assert.equal(achievements.querySelector('[data-badge-key="vodka"]').dataset.badgeState, 'locked');
 	assert.equal(achievements.querySelector('img').src, 'https://example.com/badges/beer.png');
 	assert.equal(achievements.querySelector('img').alt, 'Cute beer badge');
+	assert.equal(achievements.querySelector('img').decoding, 'sync');
 	assert.equal(achievements.querySelector('.wp-seen-posts-achievement-tooltip').textContent, 'You earned the Beer badge for seeing 5 posts.');
 	const achievementButton = achievements.querySelector('.wp-seen-posts-achievement-button');
 	assert.equal(achievementButton.getAttribute('title'), null);

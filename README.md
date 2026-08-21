@@ -22,6 +22,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - Badge images have descriptive alternative text. Desktop hover/focus and mobile taps show a custom explanation below the badge so P2 and Safari cannot clip it above the feed.
 - A newly unlocked milestone gets one short badge-pop animation and a compact explanatory toast, with motion disabled when the visitor requests reduced motion.
 - Pixel-art badge artwork is bundled locally at a maximum 96 px; the five small roadmap images load once at the top and use versioned URLs for reliable long-lived browser caching.
+- Feed pages preload those five images from the document head, eliminating late discovery on private-window and other cold-cache visits.
 - On the next page load, previously Seen cards start hidden and can be revealed; the two-card preview is used only when hiding everything would leave the feed empty.
 - Individual blog posts opened directly are recorded after one visible second and show only the eye/count inside the detected metadata row, right-aligned across from Like and pageviews and before newsletters or comments; WordPress pages are never tracked by default.
 - Every rendered post includes a small, accessible eye counter for its public lifetime Seen total and personal Seen/Unseen state. It updates immediately at the local Seen transition, then reconciles to the confirmed server total.
