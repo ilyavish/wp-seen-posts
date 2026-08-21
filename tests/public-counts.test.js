@@ -9,7 +9,7 @@ const { JSDOM } = require('jsdom');
 const publicCounts = fs.readFileSync(path.join(__dirname, '../assets/js/public-counts.js'), 'utf8');
 
 function counter(id, count) {
-	return `<span class="wp-seen-posts-public-count" data-seen-post-id="${id}" data-seen-count="${count}" aria-label="old"><span class="wp-seen-posts-public-value">${count}</span></span>`;
+	return `<span class="wp-seen-posts-public-count" data-seen-post-id="${id}" data-seen-count="${count}" data-personal-seen-state="unseen" aria-label="old"><span class="wp-seen-posts-public-value">${count}</span></span>`;
 }
 
 function boot(options = {}) {
@@ -27,7 +27,9 @@ function boot(options = {}) {
 		ledgerStorageKey: 'wp_seen_posts_counted_v1',
 		historyStorageKey: 'wp_seen_posts_v1',
 		labelSingular: 'Seen by %s visitor',
-		labelPlural: 'Seen by %s visitors'
+		labelPlural: 'Seen by %s visitors',
+		personalSeen: 'Seen',
+		personalUnseen: 'Unseen'
 	};
 	window.fetch = (url, request) => {
 		requests.push({ url, request, ids: JSON.parse(request.body).post_ids });
@@ -54,7 +56,19 @@ test('deduplicates new post IDs into one batch and applies only confirmed totals
 	assert.equal(requests.length, 1);
 	assert.deepEqual(Array.from(window.document.querySelectorAll('[data-seen-post-id="7"] .wp-seen-posts-public-value'), (node) => node.textContent), ['10', '10']);
 	assert.equal(window.document.querySelector('[data-seen-post-id="8"] .wp-seen-posts-public-value').textContent, '20');
-	assert.equal(window.document.querySelector('[data-seen-post-id="7"]').getAttribute('aria-label'), 'Seen by 10 visitors');
+	assert.equal(window.document.querySelector('[data-seen-post-id="7"]').getAttribute('aria-label'), 'Unseen. Seen by 10 visitors');
+});
+
+test('switches the subtle eye state and accessible label without adding extra post UI', () => {
+	const { window } = boot();
+	const node = window.document.querySelector('.wp-seen-posts-public-count');
+	assert.equal(node.dataset.personalSeenState, 'unseen');
+	assert.equal(node.classList.contains('wp-seen-posts-public-count-is-seen'), false);
+	assert.equal(node.getAttribute('aria-label'), 'Unseen. Seen by 9 visitors');
+	window.WPSeenPublicCounts.setPersonalState(window.document, true);
+	assert.equal(node.dataset.personalSeenState, 'seen');
+	assert.equal(node.classList.contains('wp-seen-posts-public-count-is-seen'), true);
+	assert.equal(node.getAttribute('aria-label'), 'Seen. Seen by 9 visitors');
 });
 
 test('restores an immediate visual increment after an ambiguous failed request and does not retry', async () => {
@@ -74,6 +88,7 @@ test('restores an immediate visual increment after an ambiguous failed request a
 test('does not increment a post again after a later page load in the same browser', async () => {
 	const first = boot();
 	first.window.WPSeenPublicCounts.queue(7);
+	await new Promise((resolve) => first.window.setTimeout(resolve, 0));
 	await first.window.WPSeenPublicCounts.flush();
 	assert.equal(first.requests.length, 1);
 	const ledger = first.window.localStorage.getItem('wp_seen_posts_counted_v1');
@@ -94,11 +109,15 @@ test('migrates existing Seen history into lifetime deduplication without backfil
 	assert.equal(existing.window.localStorage.getItem('wp_seen_posts_counted_v1').startsWith('b1:'), true);
 });
 
-test('keeps the lifetime deduplication ledger at a fixed storage size', () => {
+test('repaints before persistence and keeps the lifetime ledger at a fixed storage size', async () => {
 	const first = boot();
 	first.window.WPSeenPublicCounts.queue(7);
+	assert.equal(first.window.document.querySelector('.wp-seen-posts-public-value').textContent, '10');
+	assert.equal(first.window.localStorage.getItem('wp_seen_posts_counted_v1'), null);
+	await new Promise((resolve) => first.window.setTimeout(resolve, 0));
 	const firstLength = first.window.localStorage.getItem('wp_seen_posts_counted_v1').length;
 	for (let id = 8; id <= 20; id += 1) first.window.WPSeenPublicCounts.queue(id);
+	await new Promise((resolve) => first.window.setTimeout(resolve, 0));
 	const laterLength = first.window.localStorage.getItem('wp_seen_posts_counted_v1').length;
 	assert.equal(firstLength, laterLength);
 	assert.equal(laterLength < 23000, true);
@@ -109,6 +128,7 @@ test('merges lifetime deduplication updates received from another tab', async ()
 	const second = boot();
 	await new Promise((resolve) => second.window.setTimeout(resolve, 0));
 	first.window.WPSeenPublicCounts.queue(7);
+	await new Promise((resolve) => first.window.setTimeout(resolve, 0));
 	const ledger = first.window.localStorage.getItem('wp_seen_posts_counted_v1');
 	second.window.dispatchEvent(new second.window.StorageEvent('storage', {
 		key: 'wp_seen_posts_counted_v1', newValue: ledger

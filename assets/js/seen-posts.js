@@ -127,7 +127,6 @@
 		var pendingHistory = {};
 		var achievementSignature = '';
 		var achievementsInitialized = false;
-		var activeMilestoneKey = '';
 		var milestoneToast = null;
 		var milestoneToastTimer = null;
 		var previewLoadingDelay = safeNumber(config.previewLoadingDelay, 500);
@@ -231,14 +230,6 @@
 			card.setAttribute('aria-hidden', hidden ? 'true' : 'false');
 		}
 
-		function currentMilestone() {
-			var current = null;
-			milestones.forEach(function (milestone) {
-				if (historyEntryCount >= milestone.threshold) current = milestone;
-			});
-			return current;
-		}
-
 		function createMilestoneImage(milestone, className, size) {
 			var image = document.createElement('img');
 			image.className = className;
@@ -248,24 +239,6 @@
 			image.height = size;
 			image.decoding = 'async';
 			return image;
-		}
-
-		function renderCardBadge(badge) {
-			var milestone = currentMilestone();
-			while (badge.firstChild) badge.removeChild(badge.firstChild);
-			badge.classList.toggle('wp-seen-posts-badge-earned', Boolean(milestone));
-			var seenText = document.createElement('span');
-			seenText.className = 'wp-seen-posts-badge-text';
-			seenText.textContent = config.i18n.seen;
-			badge.appendChild(seenText);
-			if (!milestone) {
-				badge.removeAttribute('aria-label');
-				badge.removeAttribute('title');
-				return;
-			}
-			badge.setAttribute('aria-label', config.i18n.seen + '. ' + milestone.description);
-			badge.title = milestone.description;
-			badge.appendChild(createMilestoneImage(milestone, 'wp-seen-posts-badge-image', 24));
 		}
 
 		function closeAchievementExplanations(except) {
@@ -363,16 +336,6 @@
 			}
 			achievementsInitialized = true;
 			if (newlyEarned.length) showMilestoneToast(newlyEarned[newlyEarned.length - 1]);
-
-			var active = currentMilestone();
-			var nextActiveKey = active ? active.key : '';
-			if (nextActiveKey !== activeMilestoneKey) {
-				activeMilestoneKey = nextActiveKey;
-				cards.forEach(function (card) {
-					var badge = findCardBadge(card);
-					if (badge) renderCardBadge(badge);
-				});
-			}
 		}
 		document.addEventListener('click', function () { closeAchievementExplanations(null); });
 
@@ -446,8 +409,6 @@
 				statusGroup.className = 'wp-seen-posts-card-status';
 				card.insertAdjacentElement('afterbegin', statusGroup);
 			}
-			var looseBadge = card.querySelector(':scope > .wp-seen-posts-badge');
-			if (looseBadge) statusGroup.appendChild(looseBadge);
 			card.classList.add('wp-seen-posts-position-context');
 			return statusGroup;
 		}
@@ -459,27 +420,13 @@
 			if (counter.parentElement !== statusGroup) statusGroup.insertBefore(counter, statusGroup.firstChild);
 		}
 
-		function findCardBadge(card) {
-			return card.querySelector(':scope > .wp-seen-posts-card-status > .wp-seen-posts-badge, :scope > .wp-seen-posts-badge');
-		}
-
-		function ensureBadge(card) {
-			placePublicCounter(card);
-			var statusGroup = ensureCardStatus(card);
-			var badge = findCardBadge(card);
-			if (!badge) {
-				badge = document.createElement('span');
-				badge.className = 'wp-seen-posts-badge';
-				statusGroup.appendChild(badge);
-			}
-			renderCardBadge(badge);
-		}
-
 		function setSeen(card, id, fromHistory, deferUi) {
 			var wasNew = false;
 			if (card.dataset.seenPostState !== 'seen') seenCardCount += 1;
 			card.classList.add('wp-seen-posts-is-seen');
 			card.dataset.seenPostState = 'seen';
+			placePublicCounter(card);
+			if (publicCounts && typeof publicCounts.setPersonalState === 'function') publicCounts.setPersonalState(card, true);
 			if (!fromHistory) {
 				if (!Object.prototype.hasOwnProperty.call(history, id)) {
 					historyEntryCount += 1;
@@ -494,7 +441,6 @@
 			/* Existing browser history is never backfilled. Only the same new local
 			 * transition that marks this card Seen may enter the public batch. */
 			if (wasNew && publicCounts && typeof publicCounts.queue === 'function') publicCounts.queue(id);
-			if (!fromHistory || reloadPreviewIds.has(id)) ensureBadge(card);
 			card.classList.toggle('wp-seen-posts-reload-preview', reloadPreviewIds.has(id));
 			observer.unobserve(card);
 			applyCardVisibility(card, id);
@@ -554,6 +500,7 @@
 				else {
 					placePublicCounter(card);
 					card.dataset.seenPostState = 'unseen';
+					if (publicCounts && typeof publicCounts.setPersonalState === 'function') publicCounts.setPersonalState(card, false);
 					observer.observe(card);
 				}
 			});
@@ -569,7 +516,6 @@
 				reloadPreviewIds.clear();
 			}
 			cards.forEach(function (card, id) {
-				if (value && card.dataset.seenPostState === 'seen') ensureBadge(card);
 				card.classList.toggle('wp-seen-posts-reload-preview', reloadPreviewIds.has(id));
 				applyCardVisibility(card, id);
 			});
@@ -598,8 +544,7 @@
 				card.classList.remove('wp-seen-posts-is-seen', 'wp-seen-posts-is-hidden', 'wp-seen-posts-reload-preview');
 				card.removeAttribute('aria-hidden');
 				card.dataset.seenPostState = 'unseen';
-				var badge = findCardBadge(card);
-				if (badge) badge.remove();
+				if (publicCounts && typeof publicCounts.setPersonalState === 'function') publicCounts.setPersonalState(card, false);
 				var statusGroup = card.querySelector(':scope > .wp-seen-posts-card-status');
 				if (statusGroup && !statusGroup.querySelector('.wp-seen-posts-public-count-wrap')) statusGroup.remove();
 				if (card.querySelector(':scope > .wp-seen-posts-card-status')) card.classList.add('wp-seen-posts-position-context');
@@ -630,7 +575,7 @@
 		window.addEventListener('load', function () { if (!infiniteReady) updateUi(); }, { once: true });
 
 		initializePosts(adapter.posts);
-		if (earlyHide) earlyHide.release(true);
+		if (earlyHide) earlyHide.release();
 		document.documentElement.classList.add('wp-seen-posts-active');
 		window.setTimeout(continueFeedIfNeeded, 0);
 	}

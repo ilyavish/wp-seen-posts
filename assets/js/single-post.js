@@ -100,48 +100,6 @@
 		return { element: content, inline: false };
 	}
 
-	function closeExplanations(except) {
-		if (!status) return;
-		status.querySelectorAll('.wp-seen-posts-achievement.is-explaining').forEach(function (item) {
-			if (item === except) return;
-			item.classList.remove('is-explaining');
-			var button = item.querySelector('.wp-seen-posts-achievement-button');
-			if (button) {
-				button.setAttribute('aria-expanded', 'false');
-				if (document.activeElement === button) button.blur();
-			}
-		});
-	}
-
-	function createAchievementItem(milestone, animate) {
-		var item = document.createElement('span');
-		item.className = 'wp-seen-posts-achievement' + (animate ? ' wp-seen-posts-achievement-unlocked' : '');
-		item.dataset.badgeKey = milestone.key;
-		item.setAttribute('role', 'listitem');
-		var button = document.createElement('button');
-		button.type = 'button';
-		button.className = 'wp-seen-posts-achievement-button';
-		button.setAttribute('aria-label', milestone.description);
-		button.setAttribute('aria-expanded', 'false');
-		var tooltip = document.createElement('span');
-		tooltip.className = 'wp-seen-posts-achievement-tooltip';
-		tooltip.id = 'wp-seen-posts-single-tooltip-' + milestone.key;
-		tooltip.setAttribute('role', 'tooltip');
-		tooltip.textContent = milestone.description;
-		button.setAttribute('aria-describedby', tooltip.id);
-		button.appendChild(createImage(milestone, 'wp-seen-posts-achievement-image', 36));
-		button.addEventListener('click', function (event) {
-			event.stopPropagation();
-			var open = !item.classList.contains('is-explaining');
-			closeExplanations(open ? item : null);
-			item.classList.toggle('is-explaining', open);
-			button.setAttribute('aria-expanded', open ? 'true' : 'false');
-		});
-		item.appendChild(button);
-		item.appendChild(tooltip);
-		return item;
-	}
-
 	function showUnlockToast(milestone) {
 		if (!document.body || !milestone) return;
 		if (toastTimer) window.clearTimeout(toastTimer);
@@ -168,49 +126,20 @@
 		}, 2400);
 	}
 
-	function renderStatus(history, unlocked) {
+	function renderStatus(isSeen) {
 		var host = findStatusHost();
 		if (!host.element) return;
-		if (status) status.remove();
-		status = document.createElement('div');
+		if (!status) status = document.createElement('div');
 		status.className = 'wp-seen-posts-single-status' + (host.inline ? ' wp-seen-posts-single-status-inline' : '');
 		status.setAttribute('role', 'status');
 		status.setAttribute('aria-live', 'polite');
 		var publicCounter = findPostRoot().querySelector('.wp-seen-posts-public-count-wrap');
 		if (publicCounter) {
 			publicCounter.classList.add('wp-seen-posts-public-count-inline');
-			status.appendChild(publicCounter);
+			if (publicCounter.parentElement !== status) status.appendChild(publicCounter);
+			if (publicCounts && typeof publicCounts.setPersonalState === 'function') publicCounts.setPersonalState(publicCounter, isSeen);
 		}
-		var seen = document.createElement('strong');
-		seen.className = 'wp-seen-posts-single-seen';
-		seen.textContent = i18n.seen || 'Seen';
-		status.appendChild(seen);
-
-		var count = Object.keys(history).length;
-		var earned = milestones.filter(function (milestone) { return count >= milestone.threshold; });
-		if (earned.length) {
-			var achievements = document.createElement('span');
-			achievements.className = 'wp-seen-posts-single-achievements';
-			achievements.setAttribute('aria-label', i18n.achievements || 'Your badges');
-			var title = document.createElement('span');
-			title.className = 'wp-seen-posts-single-achievements-title';
-			title.textContent = i18n.achievements || 'Your badges';
-			var list = document.createElement('span');
-			list.className = 'wp-seen-posts-achievements-list';
-			list.setAttribute('role', 'list');
-			earned.forEach(function (milestone) {
-				list.appendChild(createAchievementItem(milestone, Boolean(unlocked && unlocked.key === milestone.key)));
-			});
-			var hint = document.createElement('span');
-			hint.className = 'wp-seen-posts-achievements-hint';
-			hint.textContent = i18n.badgeHint || 'Tap a badge to see why you earned it.';
-			achievements.appendChild(title);
-			achievements.appendChild(list);
-			achievements.appendChild(hint);
-			status.appendChild(achievements);
-		}
-		host.element.appendChild(status);
-		if (unlocked) showUnlockToast(unlocked);
+		if (publicCounter && status.parentElement !== host.element) host.element.appendChild(status);
 	}
 
 	function recordPost() {
@@ -235,9 +164,10 @@
 				});
 			}
 		} catch (error) {}
-		if (wasNew && publicCounts && typeof publicCounts.queue === 'function') publicCounts.queue(postId);
 		recorded = true;
-		renderStatus(history, unlocked);
+		renderStatus(true);
+		if (wasNew && publicCounts && typeof publicCounts.queue === 'function') publicCounts.queue(postId);
+		if (unlocked) showUnlockToast(unlocked);
 		document.dispatchEvent(new window.CustomEvent('wpSeenSinglePostRecorded', {
 			detail: { postId: postId, total: Object.keys(history).length, unlocked: unlocked ? unlocked.key : '', wasNew: wasNew }
 		}));
@@ -248,7 +178,6 @@
 		timer = window.setTimeout(recordPost, safeNumber(config.dwellTime, 1000));
 	}
 
-	document.addEventListener('click', function () { closeExplanations(null); });
 	document.addEventListener('visibilitychange', function () {
 		if (document.visibilityState === 'visible') schedule();
 		else if (timer) {
@@ -261,5 +190,13 @@
 		timer = null;
 	});
 
+	var initiallySeen = false;
+	try {
+		initiallySeen = Object.prototype.hasOwnProperty.call(
+			normalizeHistory(JSON.parse(window.localStorage.getItem(config.storageKey || 'wp_seen_posts_v1') || '{}')),
+			postId
+		);
+	} catch (error) {}
+	renderStatus(initiallySeen);
 	schedule();
 }());

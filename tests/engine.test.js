@@ -34,7 +34,7 @@ async function boot(history = {}, options = {}) {
 	const postCount = options.postCount ?? 2;
 	const postMarkup = Array.from({ length: postCount }, (_, index) => {
 		const id = index + 1;
-		const publicCounter = options.includePublicCounts
+		const publicCounter = options.includePublicCounts !== false
 			? `<div class="postcontent">Post ${id}<div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" data-seen-post-id="${id}" data-seen-count="9"><span class="wp-seen-posts-public-value">9</span></span></div></div>`
 			: `Post ${id}`;
 		return `<li id="prologue-${id}" class="post post-${id}">${publicCounter}</li>`;
@@ -66,7 +66,16 @@ async function boot(history = {}, options = {}) {
 		}
 	};
 	window.WPSeenPostsAdapters = adapters;
-	if (options.publicCounts) window.WPSeenPublicCounts = options.publicCounts;
+	window.WPSeenPublicCounts = options.publicCounts || {
+		queue() {},
+		register() {},
+		setPersonalState(root, seen) {
+			root.querySelectorAll('.wp-seen-posts-public-count').forEach((node) => {
+				node.dataset.personalSeenState = seen ? 'seen' : 'unseen';
+				node.classList.toggle('wp-seen-posts-public-count-is-seen', seen);
+			});
+		}
+	};
 	window.wpSeenPostsConfig = {
 		theme: 'p2', selectors: {}, storageKey: 'wp_seen_posts_v1', threshold: 0.5,
 		dwellTime: 5, hasMorePages: options.hasMorePages ?? false,
@@ -129,14 +138,15 @@ test('keeps the two-card preview visible before the footer engine starts', async
 			currentWindow.eval(earlyHide);
 			previewsBeforeEngine = currentWindow.document.querySelectorAll('.wp-seen-posts-prepreview').length;
 			hiddenBeforeEngine = currentWindow.document.querySelectorAll('.wp-seen-posts-prehidden').length;
-			assert.equal(currentWindow.document.querySelectorAll('.wp-seen-posts-prebadge').length, 2);
+				assert.equal(currentWindow.document.querySelectorAll('.wp-seen-posts-prebadge').length, 0);
 		}
 	});
 	assert.equal(previewsBeforeEngine, 2);
 	assert.equal(hiddenBeforeEngine, 2);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-prepreview, .wp-seen-posts-prehidden').length, 0);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-prebadge').length, 0);
-	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 2);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview > .wp-seen-posts-card-status .wp-seen-posts-public-count').length, 2);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 2);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
 });
@@ -158,7 +168,7 @@ test('does not hide a reserved card when the parser reports it again', async () 
 	await new Promise((resolve) => window.setTimeout(resolve, 0));
 	assert.equal(first.classList.contains('wp-seen-posts-prepreview'), true);
 	assert.equal(first.classList.contains('wp-seen-posts-prehidden'), false);
-	assert.equal(first.querySelectorAll(':scope > .wp-seen-posts-prebadge').length, 1);
+	assert.equal(first.querySelectorAll(':scope > .wp-seen-posts-prebadge').length, 0);
 });
 
 test('never pre-hides an expired history entry before the full engine starts', async () => {
@@ -193,7 +203,7 @@ test('releases early-hidden cards if the full engine never activates', () => {
 	assert.equal(window.WPSeenPostsEarlyHide.history, null);
 });
 
-test('initializes a large Seen history without calculating hidden badge layouts', async () => {
+test('initializes a large Seen history without calculating post-level badge layouts', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const history = Object.fromEntries(Array.from({ length: 500 }, (_, index) => [String(index + 1), now]));
 	let computedStyleCalls = 0;
@@ -214,7 +224,8 @@ test('initializes a large Seen history without calculating hidden badge layouts'
 	assert.equal(computedStyleCalls, 0);
 
 	window.document.querySelector('.wp-seen-posts-toggle').click();
-	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 500);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-card-status .wp-seen-posts-public-count').length, 500);
 	assert.equal(computedStyleCalls, 0);
 });
 
@@ -251,20 +262,22 @@ test('queues a public increment only for a new local Unseen to Seen transition',
 	assert.equal(window.document.querySelector('#prologue-1').classList.contains('wp-seen-posts-is-seen'), true);
 });
 
-test('groups the public eye total immediately beside Seen at the bottom-right of a feed card', async () => {
+test('uses only the public eye total at the bottom-right and changes its personal state immediately', async () => {
 	const { window, observer } = await boot({}, { postCount: 1, includePublicCounts: true });
 	const card = window.document.querySelector('#prologue-1');
 	const statusBefore = card.querySelector(':scope > .wp-seen-posts-card-status');
 	assert.equal(statusBefore.querySelector(':scope > .wp-seen-posts-public-count-wrap') !== null, true);
 	assert.equal(statusBefore.querySelector('.wp-seen-posts-badge'), null);
+	assert.equal(statusBefore.querySelector('.wp-seen-posts-public-count').dataset.personalSeenState, 'unseen');
 	assert.equal(card.classList.contains('wp-seen-posts-position-context'), true);
 
 	observer.trigger(card, 0.5);
 	await new Promise((resolve) => window.setTimeout(resolve, 15));
 	const statusAfter = card.querySelector(':scope > .wp-seen-posts-card-status');
 	assert.equal(statusAfter.children[0].classList.contains('wp-seen-posts-public-count-wrap'), true);
-	assert.equal(statusAfter.children[1].classList.contains('wp-seen-posts-badge'), true);
-	assert.equal(statusAfter.children[1].textContent, 'Seen');
+	assert.equal(statusAfter.children.length, 1);
+	assert.equal(statusAfter.querySelector('.wp-seen-posts-public-count').dataset.personalSeenState, 'seen');
+	assert.equal(statusAfter.querySelector('.wp-seen-posts-public-count').classList.contains('wp-seen-posts-public-count-is-seen'), true);
 });
 
 test('cancels both local Seen and public counting when a card leaves before the dwell', async () => {
@@ -333,7 +346,8 @@ test('keeps a newly Seen card visible after it is scrolled past and reveals prio
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
 	assert.equal(observer.observed.has(newCard), false);
 	assert.equal(newCard.classList.contains('wp-seen-posts-position-context'), true);
-	assert.equal(newCard.querySelector(':scope > .wp-seen-posts-card-status > .wp-seen-posts-badge').textContent, 'Seen');
+	assert.equal(newCard.querySelector(':scope > .wp-seen-posts-card-status .wp-seen-posts-public-count').dataset.personalSeenState, 'seen');
+	assert.equal(newCard.querySelector('.wp-seen-posts-badge'), null);
 	assert.equal(JSON.parse(window.localStorage.getItem('wp_seen_posts_v1'))['2'] > 0, true);
 	assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent, 'Show seen (2)');
 
@@ -373,7 +387,7 @@ test('does not hide posts that become Seen after Show seen is closed', async () 
 	assert.equal(thirdCard.getAttribute('aria-hidden'), 'false');
 });
 
-test('unlocks the beer milestone beside Seen with a brief, explained achievement', async () => {
+test('unlocks the beer milestone in the top shelf with a brief, explained achievement', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const { window, observer } = await boot({ 1: now, 2: now, 3: now, 4: now }, { postCount: 5 });
 	const achievements = window.document.querySelector('.wp-seen-posts-achievements');
@@ -397,25 +411,19 @@ test('unlocks the beer milestone beside Seen with a brief, explained achievement
 	assert.equal(achievementButton.getAttribute('aria-expanded'), 'true');
 	window.document.body.click();
 	assert.equal(achievementButton.getAttribute('aria-expanded'), 'false');
-	const cardBadge = fifth.querySelector(':scope > .wp-seen-posts-card-status > .wp-seen-posts-badge');
-	assert.equal(cardBadge.querySelector('.wp-seen-posts-badge-text').textContent, 'Seen');
-	assert.equal(cardBadge.getAttribute('aria-label'), 'Seen. You earned the Beer badge for seeing 5 posts.');
-	assert.equal(cardBadge.querySelector('img').src, 'https://example.com/badges/beer.png');
+	assert.equal(fifth.querySelector('.wp-seen-posts-badge'), null);
+	assert.equal(fifth.querySelector('.wp-seen-posts-public-count').dataset.personalSeenState, 'seen');
 	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast').textContent.includes('Achievement unlocked!'), true);
 });
 
-test('accumulates earned milestones and keeps Seen beside the highest badge on cards', async () => {
+test('accumulates earned milestones only in the top roadmap', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const history = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [String(index + 1), now]));
 	const { window } = await boot(history);
 	const achievements = window.document.querySelector('.wp-seen-posts-achievements');
 	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer', 'vodka', 'barsetka', 'gopnik', 'bmw']);
 	assert.equal(achievements.querySelectorAll('img').length, 5);
-	window.document.querySelectorAll('.wp-seen-posts-badge').forEach((badge) => {
-		assert.equal(badge.querySelector('.wp-seen-posts-badge-text').textContent, 'Seen');
-		assert.equal(badge.getAttribute('aria-label'), 'Seen. You earned the Black BMW badge for seeing 100 posts.');
-		assert.equal(badge.querySelector('img').src, 'https://example.com/badges/bmw.png');
-	});
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
 	window.document.querySelector('.wp-seen-posts-reset').click();
 	assert.equal(achievements.hidden, false);
 	assert.equal(achievements.querySelector('.wp-seen-posts-achievements-list').children.length, 5);
@@ -434,7 +442,7 @@ test('unlocks the 100-post Black BMW milestone with animation and toast', async 
 	assert.equal(bmw.classList.contains('wp-seen-posts-achievement-unlocked'), true);
 	assert.equal(bmw.querySelector('img').src, 'https://example.com/badges/bmw.png');
 	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast').textContent.includes('Black BMW badge'), true);
-	assert.equal(hundredth.querySelector('.wp-seen-posts-badge img').src, 'https://example.com/badges/bmw.png');
+	assert.equal(hundredth.querySelector('.wp-seen-posts-badge'), null);
 });
 
 test('unlocks the 20-post Barsetka milestone with animation and explanation', async () => {
@@ -449,7 +457,7 @@ test('unlocks the 20-post Barsetka milestone with animation and explanation', as
 	assert.equal(barsetka.querySelector('img').src, 'https://example.com/badges/barsetka.png');
 	assert.equal(barsetka.querySelector('.wp-seen-posts-achievement-tooltip').textContent, 'You earned the Barsetka waist bag badge for seeing 20 posts.');
 	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast').textContent.includes('Barsetka waist bag badge'), true);
-	assert.equal(twentieth.querySelector('.wp-seen-posts-badge img').src, 'https://example.com/badges/barsetka.png');
+	assert.equal(twentieth.querySelector('.wp-seen-posts-badge'), null);
 });
 
 test('initializes only supplied infinite-scroll posts without advancing while visible content remains', async () => {
@@ -507,7 +515,7 @@ test('keeps two stable Seen previews and delays the finding-unseen status', asyn
 	const { window, loadMoreClicks } = await boot({ 1: now, 2: now, 3: now, 4: now }, { postCount: 4, hasMorePages: true, previewLoadingDelay: 10 });
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 2);
-	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview > .wp-seen-posts-card-status > .wp-seen-posts-badge').length, 2);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview > .wp-seen-posts-card-status .wp-seen-posts-public-count-is-seen').length, 2);
 	const empty = window.document.querySelector('.wp-seen-posts-empty');
 	assert.equal(empty.hidden, true);
 	assert.equal(empty.textContent, 'Loading unseen posts…');
@@ -563,6 +571,7 @@ test('reset clears only Seen history and re-observes loaded cards', async () => 
 	assert.equal(window.localStorage.getItem('unrelated'), 'keep');
 	assert.equal(oldCard.dataset.seenPostState, 'unseen');
 	assert.equal(oldCard.classList.contains('wp-seen-posts-is-hidden'), false);
-	assert.equal(oldCard.classList.contains('wp-seen-posts-position-context'), false);
+	assert.equal(oldCard.classList.contains('wp-seen-posts-position-context'), true);
+	assert.equal(oldCard.querySelector('.wp-seen-posts-public-count').dataset.personalSeenState, 'unseen');
 	assert.equal(observer.observed.has(oldCard), true);
 });

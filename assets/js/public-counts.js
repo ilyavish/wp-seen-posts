@@ -20,6 +20,8 @@
 	var optimisticOriginals = new Map();
 	var nodesById = new Map();
 	var flushTimer = null;
+	var ledgerSaveTimer = null;
+	var ledgerDirty = false;
 	var inFlight = false;
 	var ledger = null;
 	var ledgerInitialized = false;
@@ -103,7 +105,24 @@
 	function saveLedger() {
 		var encoded = encodeLedger(ledger);
 		if (!encoded) return;
-		try { window.localStorage.setItem(ledgerStorageKey, encoded); } catch (error) {}
+		try {
+			window.localStorage.setItem(ledgerStorageKey, encoded);
+			ledgerDirty = false;
+		} catch (error) {}
+	}
+
+	function flushLedgerSave() {
+		if (ledgerSaveTimer) window.clearTimeout(ledgerSaveTimer);
+		ledgerSaveTimer = null;
+		if (ledgerDirty) saveLedger();
+	}
+
+	function scheduleLedgerSave() {
+		ledgerDirty = true;
+		if (ledgerSaveTimer) return;
+		/* Encoding and writing the fixed-size ledger costs more than the visual
+		 * transition. Let the eye/count repaint first and coalesce nearby writes. */
+		ledgerSaveTimer = window.setTimeout(flushLedgerSave, 0);
 	}
 
 	function mergeLedger(raw) {
@@ -136,14 +155,14 @@
 		});
 		ledgerNeedsMigration = false;
 		capturedHistory = null;
-		if (changed || ledger) saveLedger();
+		if (changed || ledger) scheduleLedgerSave();
 	}
 
 	function rememberLifetimeCount(id) {
 		ensureLedger(id);
 		if (!ledger || ledgerHas(id)) return false;
 		ledgerAdd(id);
-		saveLedger();
+		scheduleLedgerSave();
 		return true;
 	}
 
@@ -170,19 +189,30 @@
 		catch (error) { return String(count); }
 	}
 
-	function accessibleLabel(count) {
+	function accessibleLabel(count, node) {
 		var template = count === 1
 			? (config.labelSingular || 'Seen by %s visitor')
 			: (config.labelPlural || 'Seen by %s visitors');
-		return template.replace('%s', exactNumber(count));
+		var state = node && node.dataset.personalSeenState === 'seen'
+			? (config.personalSeen || 'Seen')
+			: (config.personalUnseen || 'Unseen');
+		return state + '. ' + template.replace('%s', exactNumber(count));
 	}
 
 	function rememberNode(node) {
 		if (!node || node.nodeType !== 1) return;
 		var id = validId(node.dataset.seenPostId);
 		if (!id) return;
+		if (node.dataset.personalSeenState !== 'seen') node.dataset.personalSeenState = 'unseen';
+		node.classList.toggle('wp-seen-posts-public-count-is-seen', node.dataset.personalSeenState === 'seen');
 		if (!nodesById.has(id)) nodesById.set(id, new Set());
 		nodesById.get(id).add(node);
+		var current = Number(node.dataset.seenCount);
+		if (Number.isSafeInteger(current) && current >= 0) {
+			var label = accessibleLabel(current, node);
+			node.setAttribute('aria-label', label);
+			node.title = label;
+		}
 	}
 
 	function register(root) {
@@ -197,7 +227,6 @@
 		id = validId(id);
 		count = Number(count);
 		if (!id || !Number.isSafeInteger(count) || count < 0 || !nodesById.has(id)) return;
-		var label = accessibleLabel(count);
 		nodesById.get(id).forEach(function (node) {
 			if (!node.isConnected) {
 				nodesById.get(id).delete(node);
@@ -206,6 +235,26 @@
 			var value = node.querySelector('.wp-seen-posts-public-value');
 			if (value) value.textContent = formatCompact(count);
 			node.dataset.seenCount = String(count);
+			var label = accessibleLabel(count, node);
+			node.setAttribute('aria-label', label);
+			node.title = label;
+		});
+	}
+
+	function setPersonalState(root, seen) {
+		if (!root) return;
+		var nodes = [];
+		if (root.nodeType === 1 && root.matches('.wp-seen-posts-public-count[data-seen-post-id]')) nodes.push(root);
+		if (typeof root.querySelectorAll === 'function') {
+			root.querySelectorAll('.wp-seen-posts-public-count[data-seen-post-id]').forEach(function (node) { nodes.push(node); });
+		}
+		nodes.forEach(function (node) {
+			rememberNode(node);
+			node.dataset.personalSeenState = seen ? 'seen' : 'unseen';
+			node.classList.toggle('wp-seen-posts-public-count-is-seen', Boolean(seen));
+			var count = Number(node.dataset.seenCount);
+			if (!Number.isSafeInteger(count) || count < 0) count = 0;
+			var label = accessibleLabel(count, node);
 			node.setAttribute('aria-label', label);
 			node.title = label;
 		});
@@ -306,6 +355,7 @@
 	}
 
 	function flushOnExit() {
+		flushLedgerSave();
 		if (flushTimer) window.clearTimeout(flushTimer);
 		flushTimer = null;
 		while (pending.size) {
@@ -340,6 +390,7 @@
 	window.WPSeenPublicCounts = {
 		queue: queue,
 		register: register,
+		setPersonalState: setPersonalState,
 		flush: flush,
 		formatCompact: formatCompact
 	};

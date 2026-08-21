@@ -30,19 +30,6 @@
 	if (!seenIds.size) return;
 	var previewCount = Math.max(0, Math.floor(Number(config.previewCount) || 0));
 	var previewSelector = typeof config.previewSelector === 'string' ? config.previewSelector : '';
-	var seenLabel = typeof config.seenLabel === 'string' && config.seenLabel ? config.seenLabel : 'Seen';
-	var milestones = Array.isArray(config.badges) ? config.badges.map(function (badge) {
-		return {
-			key: badge && typeof badge.key === 'string' ? badge.key : '',
-			threshold: Math.floor(Number(badge && badge.threshold) || 0),
-			label: badge && typeof badge.label === 'string' ? badge.label : '',
-			description: badge && typeof badge.description === 'string' ? badge.description : '',
-			alt: badge && typeof badge.alt === 'string' ? badge.alt : '',
-			url: badge && typeof badge.url === 'string' ? badge.url : ''
-		};
-	}).filter(function (badge) {
-		return badge.key && badge.threshold > 0 && badge.label && badge.description && badge.url;
-	}).sort(function (a, b) { return a.threshold - b.threshold; }) : [];
 	var previewCards = [];
 	var foundUnseenPreviewCard = false;
 
@@ -63,40 +50,13 @@
 	function cancelPreview() {
 		previewCards.forEach(function (card) {
 			card.classList.remove('wp-seen-posts-prepreview');
-			card.classList.remove('wp-seen-posts-position-context');
-			var badge = card.querySelector(':scope > .wp-seen-posts-prebadge');
-			if (badge) badge.remove();
 			card.classList.add('wp-seen-posts-prehidden');
 		});
 		previewCards = [];
 	}
 
 	function reservePreview(element) {
-		element.classList.add('wp-seen-posts-prepreview', 'wp-seen-posts-position-context');
-		var badge = document.createElement('span');
-		badge.className = 'wp-seen-posts-badge wp-seen-posts-prebadge';
-		var seenText = document.createElement('span');
-		seenText.className = 'wp-seen-posts-badge-text';
-		seenText.textContent = seenLabel;
-		badge.appendChild(seenText);
-		var milestone = null;
-		milestones.forEach(function (candidate) {
-			if (seenIds.size >= candidate.threshold) milestone = candidate;
-		});
-		if (milestone) {
-			badge.classList.add('wp-seen-posts-badge-earned');
-			badge.setAttribute('aria-label', seenLabel + '. ' + milestone.description);
-			badge.title = milestone.description;
-			var image = document.createElement('img');
-			image.className = 'wp-seen-posts-badge-image';
-			image.src = milestone.url;
-			image.alt = milestone.alt || milestone.label;
-			image.width = 24;
-			image.height = 24;
-			image.decoding = 'async';
-			badge.appendChild(image);
-		}
-		element.insertAdjacentElement('afterbegin', badge);
+		element.classList.add('wp-seen-posts-prepreview');
 		previewCards.push(element);
 	}
 
@@ -135,7 +95,7 @@
 	window.WPSeenPostsEarlyHide = {
 		history: history,
 		stop: function () { observer.disconnect(); },
-		release: function (keepPreviewBadges) {
+		release: function () {
 			observer.disconnect();
 			this.history = null;
 			document.querySelectorAll('.wp-seen-posts-prehidden').forEach(function (card) {
@@ -143,12 +103,6 @@
 			});
 			document.querySelectorAll('.wp-seen-posts-prepreview').forEach(function (card) {
 				card.classList.remove('wp-seen-posts-prepreview');
-				var badge = card.querySelector('.wp-seen-posts-prebadge');
-				if (keepPreviewBadges && card.classList.contains('wp-seen-posts-reload-preview') && badge) badge.classList.remove('wp-seen-posts-prebadge');
-				else {
-					if (badge) badge.remove();
-					card.classList.remove('wp-seen-posts-position-context');
-				}
 			});
 		}
 	};

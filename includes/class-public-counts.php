@@ -310,14 +310,15 @@ final class Public_Counts {
 		$count     = self::get_count( $post_id );
 		$formatted = self::format_compact( $count );
 		$exact     = number_format_i18n( $count );
-		$label     = sprintf(
+		$public_label = sprintf(
 			/* translators: %s: exact lifetime Seen count. */
 			_n( 'Seen by %s visitor', 'Seen by %s visitors', $count, 'wp-seen-posts' ),
 			$exact
 		);
+		$label = __( 'Unseen', 'wp-seen-posts' ) . '. ' . $public_label;
 
 		return sprintf(
-			'<div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" role="img" data-seen-post-id="%1$d" data-seen-count="%2$d" aria-label="%3$s" title="%3$s"><svg class="wp-seen-posts-public-eye" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><path d="M18.3 9.5C15 4.9 8.5 3.8 3.9 7.2c-1.2.9-2.2 2.1-3 3.4.2.4.5.8.8 1.2 3.3 4.6 9.6 5.6 14.2 2.4.9-.7 1.7-1.4 2.4-2.4.3-.4.5-.8.8-1.2-.3-.4-.5-.8-.8-1.1zM10.1 7.2c.5-.5 1.3-.5 1.8 0s.5 1.3 0 1.8-1.3.5-1.8 0-.5-1.3 0-1.8zM10 14.9c-3.1 0-6-1.6-7.7-4.2C3.5 9 5.1 7.8 7 7.2c-.7.8-1 1.7-1 2.7 0 2.2 1.7 4.1 4 4.1 2.2 0 4.1-1.7 4.1-4v-.1c0-1-.4-2-1.1-2.7 1.9.6 3.5 1.8 4.7 3.5-1.7 2.6-4.6 4.2-7.7 4.2z"></path></svg><span class="wp-seen-posts-public-value" aria-hidden="true">%4$s</span></span></div>',
+			'<div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" role="img" data-seen-post-id="%1$d" data-seen-count="%2$d" data-personal-seen-state="unseen" aria-label="%3$s" title="%3$s"><svg class="wp-seen-posts-public-eye" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><path d="M18.3 9.5C15 4.9 8.5 3.8 3.9 7.2c-1.2.9-2.2 2.1-3 3.4.2.4.5.8.8 1.2 3.3 4.6 9.6 5.6 14.2 2.4.9-.7 1.7-1.4 2.4-2.4.3-.4.5-.8.8-1.2-.3-.4-.5-.8-.8-1.1zM10.1 7.2c.5-.5 1.3-.5 1.8 0s.5 1.3 0 1.8-1.3.5-1.8 0-.5-1.3 0-1.8zM10 14.9c-3.1 0-6-1.6-7.7-4.2C3.5 9 5.1 7.8 7 7.2c-.7.8-1 1.7-1 2.7 0 2.2 1.7 4.1 4 4.1 2.2 0 4.1-1.7 4.1-4v-.1c0-1-.4-2-1.1-2.7 1.9.6 3.5 1.8 4.7 3.5-1.7 2.6-4.6 4.2-7.7 4.2z"></path></svg><span class="wp-seen-posts-public-value" aria-hidden="true">%4$s</span></span></div>',
 			$post_id,
 			$count,
 			esc_attr( $label ),

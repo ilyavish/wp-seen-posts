@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks posts viewed in archive feeds, hides previously seen posts on later visits, and integrates with progressive infinite scrolling.
- * Version:           1.1.6
+ * Version:           1.1.7
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.1.6';
+const VERSION = '1.1.7';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
@@ -167,6 +167,8 @@ function enqueue_assets(): void {
 				'historyStorageKey' => 'wp_seen_posts_v1',
 				'labelSingular' => __( 'Seen by %s visitor', 'wp-seen-posts' ),
 				'labelPlural'   => __( 'Seen by %s visitors', 'wp-seen-posts' ),
+				'personalSeen'  => _x( 'Seen', 'personal post state', 'wp-seen-posts' ),
+				'personalUnseen' => _x( 'Unseen', 'personal post state', 'wp-seen-posts' ),
 			)
 		) . ';',
 		'before'
@@ -191,9 +193,6 @@ function enqueue_assets(): void {
 					'retentionDays' => $limits['retention_days'],
 					'badges'        => achievement_badges(),
 					'i18n'          => array(
-						'seen'                => __( 'Seen', 'wp-seen-posts' ),
-						'achievements'        => __( 'Your badges', 'wp-seen-posts' ),
-						'badgeHint'            => __( 'Tap a badge to see why you earned it.', 'wp-seen-posts' ),
 						'achievementUnlocked' => __( 'Achievement unlocked!', 'wp-seen-posts' ),
 					),
 				)
@@ -248,7 +247,6 @@ function enqueue_assets(): void {
 		'i18n'               => array(
 			'showSeen'       => __( 'Show seen', 'wp-seen-posts' ),
 			'hideSeen'       => __( 'Hide seen', 'wp-seen-posts' ),
-			'seen'           => __( 'Seen', 'wp-seen-posts' ),
 			'reset'          => __( 'Reset seen history', 'wp-seen-posts' ),
 			'confirmReset'   => __( 'Reset your Seen history and mark the loaded posts as unseen?', 'wp-seen-posts' ),
 			'loadingUnseen'  => __( 'Loading unseen posts…', 'wp-seen-posts' ),
@@ -283,8 +281,6 @@ function enqueue_assets(): void {
 					'previewSelector' => $preview_selector,
 					'maxEntries'      => $limits['max_entries'],
 					'retentionDays'   => $limits['retention_days'],
-					'seenLabel'       => isset( $config['i18n']['seen'] ) ? (string) $config['i18n']['seen'] : __( 'Seen', 'wp-seen-posts' ),
-					'badges'          => isset( $config['badges'] ) && is_array( $config['badges'] ) ? $config['badges'] : array(),
 				)
 			) . ';' . "\n" . $early_script
 		);
