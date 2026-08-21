@@ -156,6 +156,8 @@ if (
 	false === strpos( $markup, 'role="img"' )
 	|| false === strpos( $markup, 'aria-label="Seen by 0 visitors"' )
 	|| false === strpos( $markup, '<svg class="wp-seen-posts-public-eye"' )
+	|| false === strpos( $markup, 'viewBox="0 0 20 20"' )
+	|| false === strpos( $markup, '<path d="M18.3 9.5C15 4.9' )
 	|| false !== strpos( $markup, 'dashicons' )
 ) {
 	fwrite( STDERR, 'Accessible inline-eye markup verification failed.' . PHP_EOL );

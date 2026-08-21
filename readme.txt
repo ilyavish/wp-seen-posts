@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.3
+Stable tag: 1.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -52,6 +52,10 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.1.4 =
+* Uses the WordPress Dashicons visibility eye associated with Post Views Counter while keeping it inline and request-free.
+* Restyles Seen counters and badge surfaces with quiet neutral backgrounds, lighter borders, and minimal shadows.
 
 = 1.1.3 =
 * Anchors the single-post Seen panel directly across from the Like control, even when no separate views metadata row exists.
