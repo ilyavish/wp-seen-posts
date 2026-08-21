@@ -360,7 +360,7 @@
 			if (nextActiveKey !== activeMilestoneKey) {
 				activeMilestoneKey = nextActiveKey;
 				cards.forEach(function (card) {
-					var badge = card.querySelector(':scope > .wp-seen-posts-badge');
+					var badge = findCardBadge(card);
 					if (badge) renderCardBadge(badge);
 				});
 			}
@@ -430,14 +430,38 @@
 			requestMoreIfAllHidden();
 		}
 
+		function ensureCardStatus(card) {
+			var statusGroup = card.querySelector(':scope > .wp-seen-posts-card-status');
+			if (!statusGroup) {
+				statusGroup = document.createElement('div');
+				statusGroup.className = 'wp-seen-posts-card-status';
+				card.insertAdjacentElement('afterbegin', statusGroup);
+			}
+			var looseBadge = card.querySelector(':scope > .wp-seen-posts-badge');
+			if (looseBadge) statusGroup.appendChild(looseBadge);
+			card.classList.add('wp-seen-posts-position-context');
+			return statusGroup;
+		}
+
+		function placePublicCounter(card) {
+			var counter = card.querySelector('.wp-seen-posts-public-count-wrap');
+			if (!counter) return;
+			var statusGroup = ensureCardStatus(card);
+			if (counter.parentElement !== statusGroup) statusGroup.insertBefore(counter, statusGroup.firstChild);
+		}
+
+		function findCardBadge(card) {
+			return card.querySelector(':scope > .wp-seen-posts-card-status > .wp-seen-posts-badge, :scope > .wp-seen-posts-badge');
+		}
+
 		function ensureBadge(card) {
-			var badge = card.querySelector(':scope > .wp-seen-posts-badge');
+			placePublicCounter(card);
+			var statusGroup = ensureCardStatus(card);
+			var badge = findCardBadge(card);
 			if (!badge) {
-				var cardPosition = window.getComputedStyle(card).position;
-				if (!cardPosition || cardPosition === 'static') card.classList.add('wp-seen-posts-position-context');
 				badge = document.createElement('span');
 				badge.className = 'wp-seen-posts-badge';
-				card.insertAdjacentElement('afterbegin', badge);
+				statusGroup.appendChild(badge);
 			}
 			renderCardBadge(badge);
 		}
@@ -519,6 +543,7 @@
 				if (publicCounts && typeof publicCounts.register === 'function') publicCounts.register(card);
 				if (historyAtLoad.has(id)) setSeen(card, id, true, true);
 				else {
+					placePublicCounter(card);
 					card.dataset.seenPostState = 'unseen';
 					observer.observe(card);
 				}
@@ -562,11 +587,14 @@
 			showSeen = false;
 			cards.forEach(function (card) {
 				card.classList.remove('wp-seen-posts-is-seen', 'wp-seen-posts-is-hidden', 'wp-seen-posts-reload-preview');
-				card.classList.remove('wp-seen-posts-position-context');
 				card.removeAttribute('aria-hidden');
 				card.dataset.seenPostState = 'unseen';
-				var badge = card.querySelector(':scope > .wp-seen-posts-badge');
+				var badge = findCardBadge(card);
 				if (badge) badge.remove();
+				var statusGroup = card.querySelector(':scope > .wp-seen-posts-card-status');
+				if (statusGroup && !statusGroup.querySelector('.wp-seen-posts-public-count-wrap')) statusGroup.remove();
+				if (card.querySelector(':scope > .wp-seen-posts-card-status')) card.classList.add('wp-seen-posts-position-context');
+				else card.classList.remove('wp-seen-posts-position-context');
 				observer.observe(card);
 			});
 			updateUi();

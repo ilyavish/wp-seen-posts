@@ -142,6 +142,17 @@ test('supports the alternate JP post-views metadata wrapper', async () => {
 	assert.equal(window.document.querySelector('.jp-post-views-single-meta > .wp-seen-posts-single-status') !== null, true);
 });
 
+test('moves the public eye total beside Seen in the single-post metadata row', async () => {
+	const { window } = await bootSingle({}, {
+		markup: '<!doctype html><html><body><article id="post-7" class="post"><div class="entry-content"><p>Post body</p><div class="stats_counter sd-content"><span>73 views</span></div><div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" data-seen-post-id="7" data-seen-count="428"><span class="wp-seen-posts-public-value">428</span></span></div></div><section class="comments-area">Comments</section></article></body></html>'
+	});
+	await new Promise((resolve) => window.setTimeout(resolve, 10));
+	const status = window.document.querySelector('.stats_counter.sd-content > .wp-seen-posts-single-status');
+	assert.equal(status.children[0].classList.contains('wp-seen-posts-public-count-wrap'), true);
+	assert.equal(status.children[1].classList.contains('wp-seen-posts-single-seen'), true);
+	assert.equal(window.document.querySelector('.entry-content > .wp-seen-posts-public-count-wrap'), null);
+});
+
 test('shows earned badges on a single post and explains a newly unlocked milestone', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const { window, recordedDetail } = await bootSingle({ 1: now, 2: now, 3: now, 4: now });

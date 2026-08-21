@@ -43,6 +43,8 @@ test('deduplicates new post IDs into one batch and applies only confirmed totals
 	window.WPSeenPublicCounts.queue(7);
 	window.WPSeenPublicCounts.queue('7');
 	window.WPSeenPublicCounts.queue(8);
+	assert.deepEqual(Array.from(window.document.querySelectorAll('[data-seen-post-id="7"] .wp-seen-posts-public-value'), (node) => node.textContent), ['10', '10']);
+	assert.equal(window.document.querySelector('[data-seen-post-id="8"] .wp-seen-posts-public-value').textContent, '20');
 	await window.WPSeenPublicCounts.flush();
 	assert.deepEqual(requests[0].ids, ['7', '8']);
 	assert.equal(requests.length, 1);
@@ -51,9 +53,10 @@ test('deduplicates new post IDs into one batch and applies only confirmed totals
 	assert.equal(window.document.querySelector('[data-seen-post-id="7"]').getAttribute('aria-label'), 'Seen by 10 visitors');
 });
 
-test('leaves the displayed count unchanged after an ambiguous failed request and does not retry', async () => {
+test('restores an immediate visual increment after an ambiguous failed request and does not retry', async () => {
 	const { window, requests } = boot({ fetchRejects: true });
 	window.WPSeenPublicCounts.queue(7);
+	assert.equal(window.document.querySelector('.wp-seen-posts-public-value').textContent, '10');
 	await window.WPSeenPublicCounts.flush();
 	await new Promise((resolve) => window.setTimeout(resolve, 130));
 	assert.equal(requests.length, 1);

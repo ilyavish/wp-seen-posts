@@ -143,7 +143,7 @@
 			});
 			document.querySelectorAll('.wp-seen-posts-prepreview').forEach(function (card) {
 				card.classList.remove('wp-seen-posts-prepreview');
-				var badge = card.querySelector(':scope > .wp-seen-posts-prebadge');
+				var badge = card.querySelector('.wp-seen-posts-prebadge');
 				if (keepPreviewBadges && card.classList.contains('wp-seen-posts-reload-preview') && badge) badge.classList.remove('wp-seen-posts-prebadge');
 				else {
 					if (badge) badge.remove();

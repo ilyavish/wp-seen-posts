@@ -24,7 +24,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - Pixel-art badge artwork is bundled locally at a maximum 96 px, loaded only when earned, and uses versioned URLs so browsers cache it while plugin upgrades reliably refresh it.
 - On the next page load, previously Seen cards start hidden and can be revealed; the two-card preview is used only when hiding everything would leave the feed empty.
 - Individual blog posts opened directly are recorded after one visible second and visibly show Seen plus earned badges inside the detected views row, right-aligned across from the view count and before newsletters or comments; WordPress pages are never tracked by default.
-- Every rendered post includes a small, accessible eye counter for its public lifetime Seen total. Initial values are server-rendered from one batched query and successful new counts update in place.
+- Every rendered post includes a small, accessible eye counter for its public lifetime Seen total. It sits beside the personal Seen badge in one bottom-right status cluster, updates immediately at the local Seen transition, and reconciles to the confirmed server total.
 - A new local Unseen-to-Seen transition queues its post ID for one anonymous batched REST increment; existing local history is never retroactively submitted.
 - Aggregate storage uses one lifetime row per post and one daily row per active post/site-local date. It stores no IP addresses, visitor IDs, fingerprints, referrers, or individual view events.
 - Daily aggregation uses the WordPress site timezone and indexed atomic upserts, leaving the data ready for future Today, date-range, Trending, and Rising rankings.

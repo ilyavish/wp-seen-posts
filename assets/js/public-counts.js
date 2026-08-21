@@ -6,6 +6,8 @@
 	var maxBatchSize = Math.max(1, Math.min(50, Math.floor(Number(config.maxBatchSize) || 25)));
 	var batchDelay = Math.max(100, Math.floor(Number(config.batchDelay) || 1200));
 	var pending = new Set();
+	var queuedThisPage = new Set();
+	var optimisticOriginals = new Map();
 	var nodesById = new Map();
 	var flushTimer = null;
 	var inFlight = false;
@@ -79,6 +81,25 @@
 		});
 	}
 
+	function displayedCount(id) {
+		if (!nodesById.has(id)) return null;
+		var value = null;
+		nodesById.get(id).forEach(function (node) {
+			if (value !== null || !node.isConnected) return;
+			var parsed = Number(node.dataset.seenCount);
+			if (Number.isSafeInteger(parsed) && parsed >= 0) value = parsed;
+		});
+		return value;
+	}
+
+	function rollback(ids) {
+		ids.forEach(function (id) {
+			if (!optimisticOriginals.has(id)) return;
+			update(id, optimisticOriginals.get(id));
+			optimisticOriginals.delete(id);
+		});
+	}
+
 	function takeBatch() {
 		var ids = Array.from(pending).slice(0, maxBatchSize);
 		ids.forEach(function (id) { pending.delete(id); });
@@ -94,11 +115,20 @@
 	}
 
 	function validateResponse(data, requestedIds) {
-		if (!data || typeof data !== 'object' || !data.counts || typeof data.counts !== 'object' || Array.isArray(data.counts)) return;
+		if (!data || typeof data !== 'object' || !data.counts || typeof data.counts !== 'object' || Array.isArray(data.counts)) {
+			rollback(requestedIds);
+			return;
+		}
 		requestedIds.forEach(function (id) {
-			if (!Object.prototype.hasOwnProperty.call(data.counts, id)) return;
+			if (!Object.prototype.hasOwnProperty.call(data.counts, id)) {
+				rollback([id]);
+				return;
+			}
 			var count = Number(data.counts[id]);
-			if (Number.isSafeInteger(count) && count >= 0) update(id, count);
+			if (Number.isSafeInteger(count) && count >= 0) {
+				update(id, count);
+				optimisticOriginals.delete(id);
+			} else rollback([id]);
 		});
 	}
 
@@ -113,13 +143,14 @@
 			body: JSON.stringify({ post_ids: ids }),
 			keepalive: true
 		}).then(function (response) {
-			if (!response || !response.ok) return null;
+			if (!response || !response.ok) throw new Error('Seen count request failed');
 			return response.json();
 		}).then(function (data) {
-			if (data) validateResponse(data, ids);
+			validateResponse(data, ids);
 		}).catch(function () {
 			/* The personal Seen state is independent and must keep working on failure.
 			 * Do not retry an ambiguous write: the server may already have committed it. */
+			rollback(ids);
 		}).finally(function () {
 			inFlight = false;
 			if (pending.size) scheduleFlush();
@@ -128,7 +159,13 @@
 
 	function queue(postId) {
 		var id = validId(postId);
-		if (!id || !endpoint) return;
+		if (!id || !endpoint || queuedThisPage.has(id)) return;
+		queuedThisPage.add(id);
+		var original = displayedCount(id);
+		if (original !== null) {
+			optimisticOriginals.set(id, original);
+			update(id, original + 1);
+		}
 		pending.add(id);
 		if (pending.size >= maxBatchSize && !inFlight) {
 			if (flushTimer) window.clearTimeout(flushTimer);

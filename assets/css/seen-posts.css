@@ -202,6 +202,45 @@
 	width: 24px;
 }
 
+.wp-seen-posts-card-status {
+	align-items: center;
+	background: #fffaf4;
+	border: 1px solid #ead8c7;
+	border-radius: 999px;
+	bottom: 0.5rem;
+	box-shadow: 0 1px 4px rgba(70, 45, 25, 0.1);
+	display: inline-flex;
+	gap: 0.4rem;
+	min-height: 30px;
+	padding: 0.2rem 0.48rem;
+	position: absolute;
+	right: 0.5rem;
+	z-index: 1;
+}
+
+.wp-seen-posts-card-status > .wp-seen-posts-public-count-wrap {
+	margin: 0;
+}
+
+.wp-seen-posts-card-status > .wp-seen-posts-public-count-wrap .wp-seen-posts-public-count {
+	color: #50575e;
+	font-size: 0.72rem;
+	font-weight: 700;
+}
+
+.wp-seen-posts-card-status > .wp-seen-posts-badge {
+	background: transparent;
+	border: 0;
+	border-left: 1px solid #ead8c7;
+	border-radius: 0;
+	bottom: auto;
+	box-shadow: none;
+	min-height: 24px;
+	padding: 0 0 0 0.4rem;
+	position: static;
+	right: auto;
+}
+
 .wp-seen-posts-empty {
 	border-left: 3px solid #8c8f94;
 	font-weight: 600;
@@ -243,8 +282,12 @@
 .wp-seen-posts-public-count-wrap {
 	align-items: center;
 	display: flex;
-	justify-content: flex-start;
+	justify-content: flex-end;
 	margin: 0.55rem 0 0.2rem;
+}
+
+.wp-seen-posts-single-status > .wp-seen-posts-public-count-inline {
+	margin: 0;
 }
 
 .wp-seen-posts-public-count {
@@ -408,6 +451,7 @@
 		width: auto;
 	}
 	.wp-seen-posts-single-status { align-items: flex-end; flex-direction: column; }
+	.wp-seen-posts-single-status-inline { align-items: center; flex-direction: row; }
 	.wp-seen-posts-single-achievements {
 		flex-wrap: wrap;
 		justify-content: flex-end;
