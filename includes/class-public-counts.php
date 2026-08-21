@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Stores anonymous aggregate counts without retaining visitor-level data.
  */
 final class Public_Counts {
-	public const SCHEMA_VERSION        = '1.0.0';
+	public const SCHEMA_VERSION        = '1.1.1';
 	public const SCHEMA_VERSION_OPTION = 'wp_seen_posts_schema_version';
 	public const REST_NAMESPACE        = 'wp-seen-posts/v1';
 	public const REST_ROUTE            = '/counts';
