@@ -22,6 +22,7 @@ final class Public_Counts {
 	public const MAX_BATCH_SIZE        = 25;
 	public const DAILY_RETENTION_DAYS  = 400;
 	public const CLEANUP_HOOK          = 'wp_seen_posts_prune_daily';
+	public const RENDER_PRIORITY       = PHP_INT_MAX;
 
 	/** @var array<int,int> Request-local lifetime-count cache. */
 	private static $count_cache = array();
@@ -31,8 +32,11 @@ final class Public_Counts {
 		add_action( 'rest_api_init', array( __CLASS__, 'register_rest_route' ) );
 		add_action( self::CLEANUP_HOOK, array( __CLASS__, 'cleanup_daily_counts' ) );
 		add_filter( 'the_posts', array( __CLASS__, 'prime_query_counts' ), 10, 2 );
-		add_filter( 'the_content', array( __CLASS__, 'append_counter' ), 99 );
-		add_filter( 'the_excerpt', array( __CLASS__, 'append_counter' ), 99 );
+		/* P2 auto-Read More rewrites the_content late and discards markup appended
+		 * before truncation. Render last so full content, excerpts, and truncated
+		 * cards all receive exactly one counter. */
+		add_filter( 'the_content', array( __CLASS__, 'append_counter' ), self::RENDER_PRIORITY );
+		add_filter( 'the_excerpt', array( __CLASS__, 'append_counter' ), self::RENDER_PRIORITY );
 	}
 
 	/** Create or upgrade the aggregate tables. This runs only when the schema version changes. */

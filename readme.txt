@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.7
+Stable tag: 1.1.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -55,6 +55,10 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.1.8 =
+* Keeps the eye/count visible on P2 cards truncated by the automatic Read More renderer.
+* Runs the guarded content and excerpt counter append after late truncation filters without duplicating counters on normal cards.
 
 = 1.1.7 =
 * Replaces the duplicate Seen word and per-post milestone image with one accessible eye/count state: muted for Unseen and fully opaque for Seen.

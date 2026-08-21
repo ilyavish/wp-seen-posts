@@ -4,6 +4,18 @@
 define( 'ABSPATH', __DIR__ . '/' );
 define( 'ARRAY_A', 'ARRAY_A' );
 
+$GLOBALS['wp_seen_posts_test_filters'] = array();
+
+if ( ! function_exists( 'add_action' ) ) {
+	function add_action() {}
+}
+
+if ( ! function_exists( 'add_filter' ) ) {
+	function add_filter( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
+		$GLOBALS['wp_seen_posts_test_filters'][] = array( $hook, $callback, $priority, $accepted_args );
+	}
+}
+
 if ( ! function_exists( '__' ) ) {
 	function __( $text ) {
 		return $text;
@@ -79,6 +91,24 @@ if ( ! function_exists( 'apply_filters' ) ) {
 require_once dirname( __DIR__ ) . '/includes/class-public-counts.php';
 
 use HoldMyVodka\SeenPosts\Public_Counts;
+
+Public_Counts::init();
+$render_filters = array_values(
+	array_filter(
+		$GLOBALS['wp_seen_posts_test_filters'],
+		static function ( $filter ) {
+			return in_array( $filter[0], array( 'the_content', 'the_excerpt' ), true );
+		}
+	)
+);
+if (
+	2 !== count( $render_filters )
+	|| Public_Counts::RENDER_PRIORITY !== $render_filters[0][2]
+	|| Public_Counts::RENDER_PRIORITY !== $render_filters[1][2]
+) {
+	fwrite( STDERR, 'Counter rendering is not registered after late Read More filters.' . PHP_EOL );
+	exit( 1 );
+}
 
 $cases = array(
 	0       => '0',
