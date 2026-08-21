@@ -26,9 +26,12 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - Individual blog posts opened directly are recorded after one visible second and visibly show Seen plus earned badges inside the detected views row, right-aligned across from the view count and before newsletters or comments; WordPress pages are never tracked by default.
 - Every rendered post includes a small, accessible eye counter for its public lifetime Seen total. It sits beside the personal Seen badge in one bottom-right status cluster, updates immediately at the local Seen transition, and reconciles to the confirmed server total.
 - A new local Unseen-to-Seen transition queues its post ID for one anonymous batched REST increment; existing local history is never retroactively submitted.
+- A separate fixed-size anonymous browser ledger remembers public increments after personal Seen history is reset or pruned. Its encoded storage remains about 22 KB regardless of how many pages are revisited.
 - Aggregate storage uses one lifetime row per post and one daily row per active post/site-local date. It stores no IP addresses, visitor IDs, fingerprints, referrers, or individual view events.
+- Daily aggregate buckets are retained for 400 site-local days, supporting Today/Week/Month and year-over-year trend work; one indexed daily cleanup prunes older buckets while permanent lifetime totals remain unchanged.
 - Daily aggregation uses the WordPress site timezone and indexed atomic upserts, leaving the data ready for future Today, date-range, Trending, and Rising rankings.
 - Anonymous state is stored as `{ postId: unixTimestamp }` in `wp_seen_posts_v1`.
+- Public-count deduplication is stored separately as a bounded probabilistic bitmap in `wp_seen_posts_counted_v1`; clearing site data or changing browser/device intentionally starts a new anonymous browser identity.
 - History defaults to 365 days and 3,000 IDs. Use `WP_SEEN_POSTS_RETENTION_DAYS`, `WP_SEEN_POSTS_MAX_ENTRIES`, or their matching filters to change the limits.
 - The server archive query remains untouched and cacheable. Cached HTML may show a slightly stale count until a visitor's own confirmed increment updates it.
 - Full post markup remains server-rendered; hiding is a visitor-side interaction and does not remove content from the HTML response used by search engines.

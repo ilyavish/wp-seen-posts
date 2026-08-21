@@ -18,10 +18,14 @@ function boot(options = {}) {
 	});
 	const { window } = dom;
 	const requests = [];
+	if (options.history) window.localStorage.setItem('wp_seen_posts_v1', JSON.stringify(options.history));
+	if (options.ledger) window.localStorage.setItem('wp_seen_posts_counted_v1', options.ledger);
 	window.wpSeenPublicCountsConfig = {
 		endpoint: 'https://example.com/wp-json/wp-seen-posts/v1/counts',
 		maxBatchSize: options.maxBatchSize || 25,
 		batchDelay: 100,
+		ledgerStorageKey: 'wp_seen_posts_counted_v1',
+		historyStorageKey: 'wp_seen_posts_v1',
 		labelSingular: 'Seen by %s visitor',
 		labelPlural: 'Seen by %s visitors'
 	};
@@ -61,6 +65,57 @@ test('restores an immediate visual increment after an ambiguous failed request a
 	await new Promise((resolve) => window.setTimeout(resolve, 130));
 	assert.equal(requests.length, 1);
 	assert.equal(window.document.querySelector('.wp-seen-posts-public-value').textContent, '9');
+	const returning = boot({ ledger: window.localStorage.getItem('wp_seen_posts_counted_v1') });
+	returning.window.WPSeenPublicCounts.queue(7);
+	await returning.window.WPSeenPublicCounts.flush();
+	assert.equal(returning.requests.length, 0);
+});
+
+test('does not increment a post again after a later page load in the same browser', async () => {
+	const first = boot();
+	first.window.WPSeenPublicCounts.queue(7);
+	await first.window.WPSeenPublicCounts.flush();
+	assert.equal(first.requests.length, 1);
+	const ledger = first.window.localStorage.getItem('wp_seen_posts_counted_v1');
+
+	const returning = boot({ ledger });
+	returning.window.WPSeenPublicCounts.queue(7);
+	await returning.window.WPSeenPublicCounts.flush();
+	assert.equal(returning.requests.length, 0);
+	assert.equal(returning.window.document.querySelector('.wp-seen-posts-public-value').textContent, '9');
+});
+
+test('migrates existing Seen history into lifetime deduplication without backfilling it', async () => {
+	const existing = boot({ history: { 7: Math.floor(Date.now() / 1000) } });
+	await new Promise((resolve) => existing.window.setTimeout(resolve, 60));
+	existing.window.WPSeenPublicCounts.queue(7);
+	await existing.window.WPSeenPublicCounts.flush();
+	assert.equal(existing.requests.length, 0);
+	assert.equal(existing.window.localStorage.getItem('wp_seen_posts_counted_v1').startsWith('b1:'), true);
+});
+
+test('keeps the lifetime deduplication ledger at a fixed storage size', () => {
+	const first = boot();
+	first.window.WPSeenPublicCounts.queue(7);
+	const firstLength = first.window.localStorage.getItem('wp_seen_posts_counted_v1').length;
+	for (let id = 8; id <= 20; id += 1) first.window.WPSeenPublicCounts.queue(id);
+	const laterLength = first.window.localStorage.getItem('wp_seen_posts_counted_v1').length;
+	assert.equal(firstLength, laterLength);
+	assert.equal(laterLength < 23000, true);
+});
+
+test('merges lifetime deduplication updates received from another tab', async () => {
+	const first = boot();
+	const second = boot();
+	await new Promise((resolve) => second.window.setTimeout(resolve, 0));
+	first.window.WPSeenPublicCounts.queue(7);
+	const ledger = first.window.localStorage.getItem('wp_seen_posts_counted_v1');
+	second.window.dispatchEvent(new second.window.StorageEvent('storage', {
+		key: 'wp_seen_posts_counted_v1', newValue: ledger
+	}));
+	second.window.WPSeenPublicCounts.queue(7);
+	await second.window.WPSeenPublicCounts.flush();
+	assert.equal(second.requests.length, 0);
 });
 
 test('registers only the posts supplied by the infinite-scroll event', async () => {

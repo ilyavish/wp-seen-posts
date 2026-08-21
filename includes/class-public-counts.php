@@ -15,11 +15,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Stores anonymous aggregate counts without retaining visitor-level data.
  */
 final class Public_Counts {
-	public const SCHEMA_VERSION        = '1.1.1';
+	public const SCHEMA_VERSION        = '1.1.2';
 	public const SCHEMA_VERSION_OPTION = 'wp_seen_posts_schema_version';
 	public const REST_NAMESPACE        = 'wp-seen-posts/v1';
 	public const REST_ROUTE            = '/counts';
 	public const MAX_BATCH_SIZE        = 25;
+	public const DAILY_RETENTION_DAYS  = 400;
+	public const CLEANUP_HOOK          = 'wp_seen_posts_prune_daily';
 
 	/** @var array<int,int> Request-local lifetime-count cache. */
 	private static $count_cache = array();
@@ -27,6 +29,7 @@ final class Public_Counts {
 	/** Register front-end rendering and the anonymous batch endpoint. */
 	public static function init(): void {
 		add_action( 'rest_api_init', array( __CLASS__, 'register_rest_route' ) );
+		add_action( self::CLEANUP_HOOK, array( __CLASS__, 'cleanup_daily_counts' ) );
 		add_filter( 'the_posts', array( __CLASS__, 'prime_query_counts' ), 10, 2 );
 		add_filter( 'the_content', array( __CLASS__, 'append_counter' ), 99 );
 		add_filter( 'the_excerpt', array( __CLASS__, 'append_counter' ), 99 );
@@ -58,6 +61,7 @@ final class Public_Counts {
 
 		dbDelta( $lifetime_sql );
 		dbDelta( $daily_sql );
+		self::schedule_cleanup();
 
 		if ( false === get_option( self::SCHEMA_VERSION_OPTION, false ) ) {
 			add_option( self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, '', true );
@@ -71,6 +75,31 @@ final class Public_Counts {
 		if ( self::SCHEMA_VERSION !== get_option( self::SCHEMA_VERSION_OPTION, '' ) ) {
 			self::install_schema();
 		}
+	}
+
+	/** Schedule one indexed retention cleanup per day, never one cleanup per request. */
+	public static function schedule_cleanup(): void {
+		if ( ! wp_next_scheduled( self::CLEANUP_HOOK ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', self::CLEANUP_HOOK );
+		}
+	}
+
+	/** Remove obsolete daily buckets while preserving exact lifetime totals forever. */
+	public static function cleanup_daily_counts(): void {
+		global $wpdb;
+
+		$retention_days = max( 31, (int) apply_filters( 'wp_seen_posts_daily_retention_days', self::DAILY_RETENTION_DAYS ) );
+		$cutoff_date     = current_datetime()->modify( '-' . $retention_days . ' days' )->format( 'Y-m-d' );
+		$sql             = $wpdb->prepare(
+			'DELETE FROM ' . self::daily_table() . ' WHERE view_date < %s',
+			$cutoff_date
+		);
+		$wpdb->query( $sql );
+	}
+
+	/** Stop the maintenance event when the plugin is deactivated. */
+	public static function unschedule_cleanup(): void {
+		wp_clear_scheduled_hook( self::CLEANUP_HOOK );
 	}
 
 	/** Register the anonymous, IDs-only batch endpoint. */

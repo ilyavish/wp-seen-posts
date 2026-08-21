@@ -64,6 +64,18 @@ if ( ! function_exists( 'current_time' ) ) {
 	}
 }
 
+if ( ! function_exists( 'current_datetime' ) ) {
+	function current_datetime() {
+		return new DateTimeImmutable( '2026-08-21', new DateTimeZone( 'Asia/Tbilisi' ) );
+	}
+}
+
+if ( ! function_exists( 'apply_filters' ) ) {
+	function apply_filters( $hook, $value ) {
+		return $value;
+	}
+}
+
 require_once dirname( __DIR__ ) . '/includes/class-public-counts.php';
 
 use HoldMyVodka\SeenPosts\Public_Counts;
@@ -109,7 +121,10 @@ class WP_Seen_Posts_Test_DB {
 	public $prefix = 'test_';
 	public $queries = array();
 
-	public function prepare( $sql, $args ) {
+	public function prepare( $sql, ...$args ) {
+		if ( 1 === count( $args ) && is_array( $args[0] ) ) {
+			$args = $args[0];
+		}
 		return $sql . ' /* ' . implode( ',', $args ) . ' */';
 	}
 
@@ -182,6 +197,17 @@ if (
 	|| 'ROLLBACK' !== end( $GLOBALS['wpdb']->queries )
 ) {
 	fwrite( STDERR, 'Failed daily write did not roll back the lifetime write.' . PHP_EOL );
+	exit( 1 );
+}
+
+$GLOBALS['wpdb'] = new WP_Seen_Posts_Test_DB();
+Public_Counts::cleanup_daily_counts();
+$cleanup_query = end( $GLOBALS['wpdb']->queries );
+if (
+	false === strpos( $cleanup_query, 'DELETE FROM test_hmv_seen_daily WHERE view_date < %s' )
+	|| false === strpos( $cleanup_query, '2025-07-17' )
+) {
+	fwrite( STDERR, 'Bounded daily-retention cleanup verification failed.' . PHP_EOL );
 	exit( 1 );
 }
 

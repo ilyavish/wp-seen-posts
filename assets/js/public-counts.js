@@ -5,16 +5,146 @@
 	var endpoint = typeof config.endpoint === 'string' ? config.endpoint : '';
 	var maxBatchSize = Math.max(1, Math.min(50, Math.floor(Number(config.maxBatchSize) || 25)));
 	var batchDelay = Math.max(100, Math.floor(Number(config.batchDelay) || 1200));
+	var ledgerStorageKey = typeof config.ledgerStorageKey === 'string' && config.ledgerStorageKey
+		? config.ledgerStorageKey
+		: 'wp_seen_posts_counted_v1';
+	var historyStorageKey = typeof config.historyStorageKey === 'string' && config.historyStorageKey
+		? config.historyStorageKey
+		: 'wp_seen_posts_v1';
+	var ledgerPrefix = 'b1:';
+	var ledgerByteLength = 16384;
+	var ledgerBitMask = ledgerByteLength * 8 - 1;
+	var ledgerHashCount = 7;
 	var pending = new Set();
 	var queuedThisPage = new Set();
 	var optimisticOriginals = new Map();
 	var nodesById = new Map();
 	var flushTimer = null;
 	var inFlight = false;
+	var ledger = null;
+	var ledgerInitialized = false;
+	var ledgerNeedsMigration = false;
+	var capturedHistory = window.WPSeenPostsEarlyHide && window.WPSeenPostsEarlyHide.history
+		? window.WPSeenPostsEarlyHide.history
+		: null;
 
 	function validId(value) {
 		value = String(value || '');
 		return /^[1-9]\d*$/.test(value) ? value : '';
+	}
+
+	function decodeLedger(raw) {
+		if (typeof raw !== 'string' || raw.indexOf(ledgerPrefix) !== 0 || typeof window.atob !== 'function') return null;
+		try {
+			var binary = window.atob(raw.slice(ledgerPrefix.length));
+			if (binary.length !== ledgerByteLength) return null;
+			var bytes = new Uint8Array(ledgerByteLength);
+			for (var index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+			return bytes;
+		} catch (error) { return null; }
+	}
+
+	function encodeLedger(bytes) {
+		if (!bytes || typeof window.btoa !== 'function') return '';
+		var binary = '';
+		for (var index = 0; index < bytes.length; index += 1) binary += String.fromCharCode(bytes[index]);
+		return ledgerPrefix + window.btoa(binary);
+	}
+
+	function hashString(value, seed) {
+		var hash = seed >>> 0;
+		for (var index = 0; index < value.length; index += 1) {
+			hash ^= value.charCodeAt(index);
+			hash = Math.imul(hash, 16777619);
+		}
+		hash ^= hash >>> 16;
+		hash = Math.imul(hash, 2246822507);
+		hash ^= hash >>> 13;
+		return hash >>> 0;
+	}
+
+	function ledgerPositions(id) {
+		var first = hashString(id, 2166136261);
+		var second = hashString(id, 2654435769) | 1;
+		var positions = [];
+		for (var index = 0; index < ledgerHashCount; index += 1) {
+			positions.push((first + Math.imul(index, second)) & ledgerBitMask);
+		}
+		return positions;
+	}
+
+	function ledgerHas(id) {
+		if (!ledger) return false;
+		return ledgerPositions(id).every(function (position) {
+			return Boolean(ledger[position >>> 3] & (1 << (position & 7)));
+		});
+	}
+
+	function ledgerAdd(id) {
+		if (!ledger) return false;
+		var changed = false;
+		ledgerPositions(id).forEach(function (position) {
+			var byteIndex = position >>> 3;
+			var bit = 1 << (position & 7);
+			if (!(ledger[byteIndex] & bit)) changed = true;
+			ledger[byteIndex] |= bit;
+		});
+		return changed;
+	}
+
+	function readHistoryForMigration() {
+		if (capturedHistory && !Array.isArray(capturedHistory) && typeof capturedHistory === 'object') return capturedHistory;
+		try {
+			var parsed = JSON.parse(window.localStorage.getItem(historyStorageKey) || '{}');
+			return parsed && !Array.isArray(parsed) && typeof parsed === 'object' ? parsed : {};
+		} catch (error) { return {}; }
+	}
+
+	function saveLedger() {
+		var encoded = encodeLedger(ledger);
+		if (!encoded) return;
+		try { window.localStorage.setItem(ledgerStorageKey, encoded); } catch (error) {}
+	}
+
+	function mergeLedger(raw) {
+		var incoming = decodeLedger(raw);
+		if (!incoming) return;
+		if (!ledgerInitialized) {
+			ledger = incoming;
+			ledgerInitialized = true;
+			ledgerNeedsMigration = false;
+			capturedHistory = null;
+			return;
+		}
+		for (var index = 0; index < ledger.length; index += 1) ledger[index] |= incoming[index];
+	}
+
+	function ensureLedger(excludeId) {
+		if (!ledgerInitialized) {
+			var stored = null;
+			try { stored = decodeLedger(window.localStorage.getItem(ledgerStorageKey)); } catch (error) {}
+			ledger = stored || new Uint8Array(ledgerByteLength);
+			ledgerNeedsMigration = !stored;
+			ledgerInitialized = true;
+		}
+		if (!ledgerNeedsMigration) return;
+		var changed = false;
+		var history = readHistoryForMigration();
+		Object.keys(history).forEach(function (id) {
+			id = validId(id);
+			if (id && id !== excludeId && ledgerAdd(id)) changed = true;
+		});
+		ledgerNeedsMigration = false;
+		capturedHistory = null;
+		if (changed || ledger) saveLedger();
+	}
+
+	function rememberLifetimeCount(id) {
+		ensureLedger(id);
+		if (!ledger || ledgerHas(id)) return false;
+		ledgerAdd(id);
+		saveLedger();
+		return true;
 	}
 
 	function trimDecimal(value) {
@@ -161,6 +291,7 @@
 		var id = validId(postId);
 		if (!id || !endpoint || queuedThisPage.has(id)) return;
 		queuedThisPage.add(id);
+		if (!rememberLifetimeCount(id)) return;
 		var original = displayedCount(id);
 		if (original !== null) {
 			optimisticOriginals.set(id, original);
@@ -197,8 +328,14 @@
 		if (!event.detail || !event.detail.posts) return;
 		Array.prototype.forEach.call(event.detail.posts, register);
 	});
+	window.addEventListener('storage', function (event) {
+		if (event.key === ledgerStorageKey && event.newValue) mergeLedger(event.newValue);
+	});
 	window.addEventListener('pagehide', flushOnExit);
 	register(document);
+	if (typeof window.requestIdleCallback === 'function') {
+		window.requestIdleCallback(function () { ensureLedger(''); }, { timeout: 750 });
+	} else window.setTimeout(function () { ensureLedger(''); }, 50);
 
 	window.WPSeenPublicCounts = {
 		queue: queue,

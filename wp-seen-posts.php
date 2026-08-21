@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks posts viewed in archive feeds, hides previously seen posts on later visits, and integrates with progressive infinite scrolling.
- * Version:           1.1.5
+ * Version:           1.1.6
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.1.5';
+const VERSION = '1.1.6';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
@@ -163,6 +163,8 @@ function enqueue_assets(): void {
 				'endpoint'      => rest_url( Public_Counts::REST_NAMESPACE . Public_Counts::REST_ROUTE ),
 				'maxBatchSize'  => Public_Counts::MAX_BATCH_SIZE,
 				'batchDelay'    => 100,
+				'ledgerStorageKey' => 'wp_seen_posts_counted_v1',
+				'historyStorageKey' => 'wp_seen_posts_v1',
 				'labelSingular' => __( 'Seen by %s visitor', 'wp-seen-posts' ),
 				'labelPlural'   => __( 'Seen by %s visitors', 'wp-seen-posts' ),
 			)
@@ -313,3 +315,9 @@ function activate(): void {
 	Public_Counts::install_schema();
 }
 register_activation_hook( __FILE__, __NAMESPACE__ . '\\activate' );
+
+/** Remove the maintenance schedule while the plugin is inactive. */
+function deactivate(): void {
+	Public_Counts::unschedule_cleanup();
+}
+register_deactivation_hook( __FILE__, __NAMESPACE__ . '\\deactivate' );

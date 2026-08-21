@@ -4,7 +4,7 @@ Tags: seen posts, unread, feed, p2, infinite scroll
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.5
+Stable tag: 1.1.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,7 +26,9 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Records individual blog posts as Seen after a one-second visible visit, then shows the eye total, Seen, and earned badges across from the Like control; WordPress pages are not tracked.
 * Displays a lightweight public lifetime Seen counter with an inline eye icon on feed and single-post views.
 * Batches newly Seen post IDs into small anonymous REST writes and updates counters only after confirmed responses.
+* Keeps a separate fixed-size anonymous browser ledger so repeat visits never increment the same post after personal Seen history is reset or pruned.
 * Stores only lifetime and site-local daily aggregates, with no visitor profiles or raw view events.
+* Retains 400 days of indexed daily aggregates for ranking and trends, then prunes older daily buckets without changing lifetime totals.
 * Unlocks locally bundled beer, vodka, barsetka waist bag, gopnik, and Black BMW badges at 5, 10, 20, 50, and 100 unique Seen posts.
 * Keeps future badges visibly grayed out in the top badge shelf as an unlock roadmap; post cards and single posts continue to show earned badges only.
 * Explains badges on hover, keyboard focus, and mobile tap, with descriptive image text and a short reduced-motion-safe unlock celebration.
@@ -53,6 +55,11 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.1.6 =
+* Adds a fixed-size anonymous browser ledger that prevents lifetime repeat increments even after personal Seen history is reset, expires, or reaches its size limit.
+* Migrates existing local Seen history into the ledger without retroactively submitting old posts.
+* Bounds historical database growth with a daily indexed cleanup of aggregate buckets older than 400 site-local days; lifetime totals remain permanent.
 
 = 1.1.5 =
 * Keeps all milestones visible in the top badge shelf, with locked badges muted in grayscale and earned badges in full color.
