@@ -1,6 +1,6 @@
 {
   "name": "wp-seen-posts",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.js && php tests/public-counts.php && php tests/top-seen-widget.php && node --check assets/js/early-hide.js && node --check assets/js/seen-posts.js && node --check assets/js/single-post.js && node --check assets/js/public-counts.js && php -l wp-seen-posts.php && php -l includes/class-public-counts.php && php -l includes/class-top-seen-widget.php"

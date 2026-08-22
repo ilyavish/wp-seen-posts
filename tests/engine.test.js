@@ -151,15 +151,15 @@ test('asks the public counter layer to restore markup stripped by Read More', as
 	assert.equal(window.document.querySelector('#prologue-1 > .wp-seen-posts-card-status .wp-seen-posts-public-value').textContent, '9');
 });
 
-test('keeps the Seen counter inline with WP ULike on feed and archive cards', async () => {
+test('keeps the feed eye at the bottom-right instead of placing it inline with WP ULike', async () => {
 	const { window } = await boot({}, { postCount: 1, includeWpULike: true });
 	const card = window.document.querySelector('#prologue-1');
-	const actionRow = card.querySelector('.wp-seen-posts-card-action-row');
-	const status = actionRow.querySelector('.wp-seen-posts-card-status-inline');
-	assert.equal(actionRow.firstElementChild.classList.contains('wpulike'), true);
-	assert.equal(actionRow.lastElementChild, status);
+	const content = card.querySelector('.postcontent');
+	const status = card.querySelector(':scope > .wp-seen-posts-card-status');
+	assert.equal(card.querySelector('.wp-seen-posts-card-action-row'), null);
+	assert.equal(content.querySelector(':scope > .wpulike') !== null, true);
 	assert.equal(status.querySelector('.wp-seen-posts-public-count') !== null, true);
-	assert.equal(card.classList.contains('wp-seen-posts-position-context'), false);
+	assert.equal(card.classList.contains('wp-seen-posts-position-context'), true);
 });
 
 test('keeps the two-card preview visible before the footer engine starts', async () => {

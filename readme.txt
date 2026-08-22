@@ -4,7 +4,7 @@ Tags: seen posts, unread, popular posts, analytics, p2
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.2.2
+Stable tag: 1.2.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -58,6 +58,10 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.2.3 =
+* Restores the feed and archive fire/eye/count group to the subtle bottom-right card position instead of placing it inline with WP ULike.
+* Leaves the single-post eye/count in its existing metadata action row.
 
 = 1.2.2 =
 * Removes serial archive-network waits for returning visitors by warming up to six same-origin pages in parallel when the loaded feed is entirely Seen.
