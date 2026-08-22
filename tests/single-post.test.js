@@ -115,6 +115,16 @@ test('keeps the eye total across from Likes when the live post has no views meta
 	assert.equal(Boolean(status.compareDocumentPosition(window.document.querySelector('.respond-wrap')) & window.Node.DOCUMENT_POSITION_FOLLOWING), true);
 });
 
+test('keeps the weekly-hot fire before the eye when moving a single-post counter', async () => {
+	const { window } = await bootSingle({}, {
+		markup: '<!doctype html><html><body><ul id="postlist"><li id="prologue-7" class="post hentry"><div id="content-7" class="postcontent"><p>Post body</p><div class="wpulike"><button type="button">Like</button></div><div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" data-seen-post-id="7" data-weekly-hot="true"><span class="wp-seen-posts-weekly-hot" aria-hidden="true">🔥</span><svg class="wp-seen-posts-public-eye"></svg><span class="wp-seen-posts-public-value">3</span></span></div></div></li></ul></body></html>'
+	});
+	await new Promise((resolve) => window.setTimeout(resolve, 10));
+	const counter = window.document.querySelector('.wp-seen-posts-single-action-row .wp-seen-posts-public-count');
+	assert.equal(counter.children[0].classList.contains('wp-seen-posts-weekly-hot'), true);
+	assert.equal(counter.children[1].classList.contains('wp-seen-posts-public-eye'), true);
+});
+
 test('does not count time spent in a hidden single-post tab', async () => {
 	const { window, setVisibility, writes } = await bootSingle({}, { visibility: 'hidden' });
 	await new Promise((resolve) => window.setTimeout(resolve, 10));

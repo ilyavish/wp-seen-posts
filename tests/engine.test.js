@@ -34,8 +34,9 @@ async function boot(history = {}, options = {}) {
 	const postCount = options.postCount ?? 2;
 	const postMarkup = Array.from({ length: postCount }, (_, index) => {
 		const id = index + 1;
+		const like = options.includeWpULike ? `<div class="wpulike"><button class="wp_ulike_btn">Like ${id}</button></div>` : '';
 		const publicCounter = options.includePublicCounts !== false
-			? `<div class="postcontent">Post ${id}<div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" data-seen-post-id="${id}" data-seen-count="9"><span class="wp-seen-posts-public-value">9</span></span></div></div>`
+			? `<div class="postcontent">Post ${id}${like}<div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" data-seen-post-id="${id}" data-seen-count="9"><span class="wp-seen-posts-public-value">9</span></span></div></div>`
 			: `<div class="postcontent">Post ${id}<p class="p2-auto-read-more-wrap"><a class="p2-auto-read-more">Read more →</a></p></div>`;
 		return `<li id="prologue-${id}" class="post post-${id}">${publicCounter}</li>`;
 	}).join('');
@@ -144,6 +145,17 @@ test('asks the public counter layer to restore markup stripped by Read More', as
 	});
 	assert.deepEqual(ensured, ['1']);
 	assert.equal(window.document.querySelector('#prologue-1 > .wp-seen-posts-card-status .wp-seen-posts-public-value').textContent, '9');
+});
+
+test('keeps the Seen counter inline with WP ULike on feed and archive cards', async () => {
+	const { window } = await boot({}, { postCount: 1, includeWpULike: true });
+	const card = window.document.querySelector('#prologue-1');
+	const actionRow = card.querySelector('.wp-seen-posts-card-action-row');
+	const status = actionRow.querySelector('.wp-seen-posts-card-status-inline');
+	assert.equal(actionRow.firstElementChild.classList.contains('wpulike'), true);
+	assert.equal(actionRow.lastElementChild, status);
+	assert.equal(status.querySelector('.wp-seen-posts-public-count') !== null, true);
+	assert.equal(card.classList.contains('wp-seen-posts-position-context'), false);
 });
 
 test('keeps the two-card preview visible before the footer engine starts', async () => {

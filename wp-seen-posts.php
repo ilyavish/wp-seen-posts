@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks Seen posts, hides them on later feed visits, and provides anonymous public counters and Top Seen rankings.
- * Version:           1.2.0
+ * Version:           1.2.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
@@ -200,18 +200,20 @@ function enqueue_assets(): void {
 		'wp-seen-posts-public-counts',
 		'window.wpSeenPublicCountsConfig = ' . wp_json_encode(
 			array(
-				'endpoint'      => rest_url( Public_Counts::REST_NAMESPACE . Public_Counts::REST_ROUTE ),
-				'readEndpoint'  => rest_url( Public_Counts::REST_NAMESPACE . Public_Counts::REST_READ_ROUTE ),
-				'maxBatchSize'  => Public_Counts::MAX_BATCH_SIZE,
-				'batchDelay'    => 100,
-				'initialCounts' => (object) $initial_counts,
-				'ledgerStorageKey' => 'wp_seen_posts_counted_v1',
-				'historyStorageKey' => 'wp_seen_posts_v1',
-				'labelSingular' => __( 'Seen by %s visitor', 'wp-seen-posts' ),
-				'labelPlural'   => __( 'Seen by %s visitors', 'wp-seen-posts' ),
-				'personalSeen'  => _x( 'Seen', 'personal post state', 'wp-seen-posts' ),
-				'personalUnseen' => _x( 'Unseen', 'personal post state', 'wp-seen-posts' ),
-				'loadingLabel'  => __( 'Loading Seen count', 'wp-seen-posts' ),
+				'endpoint'           => rest_url( Public_Counts::REST_NAMESPACE . Public_Counts::REST_ROUTE ),
+				'readEndpoint'       => rest_url( Public_Counts::REST_NAMESPACE . Public_Counts::REST_READ_ROUTE ),
+				'maxBatchSize'       => Public_Counts::MAX_BATCH_SIZE,
+				'batchDelay'         => 100,
+				'initialCounts'      => (object) $initial_counts,
+				'weeklyHotPostIds'   => Public_Counts::weekly_hot_post_ids(),
+				'ledgerStorageKey'   => 'wp_seen_posts_counted_v1',
+				'historyStorageKey'  => 'wp_seen_posts_v1',
+				'labelSingular'      => __( 'Seen by %s visitor', 'wp-seen-posts' ),
+				'labelPlural'        => __( 'Seen by %s visitors', 'wp-seen-posts' ),
+				'personalSeen'       => _x( 'Seen', 'personal post state', 'wp-seen-posts' ),
+				'personalUnseen'     => _x( 'Unseen', 'personal post state', 'wp-seen-posts' ),
+				'loadingLabel'       => __( 'Loading Seen count', 'wp-seen-posts' ),
+				'weeklyHotLabel'     => __( 'Top 7 this week', 'wp-seen-posts' ),
 			)
 		) . ';',
 		'before'

@@ -5,6 +5,7 @@ define( 'ABSPATH', __DIR__ . '/' );
 define( 'ARRAY_A', 'ARRAY_A' );
 
 $GLOBALS['wp_seen_posts_test_filters'] = array();
+$GLOBALS['wp_seen_posts_test_transients'] = array();
 
 if ( ! function_exists( 'add_action' ) ) {
 	function add_action() {}
@@ -109,6 +110,21 @@ if ( ! function_exists( 'current_datetime' ) ) {
 if ( ! function_exists( 'apply_filters' ) ) {
 	function apply_filters( $hook, $value ) {
 		return $value;
+	}
+}
+
+if ( ! function_exists( 'get_transient' ) ) {
+	function get_transient( $key ) {
+		return array_key_exists( $key, $GLOBALS['wp_seen_posts_test_transients'] )
+			? $GLOBALS['wp_seen_posts_test_transients'][ $key ]
+			: false;
+	}
+}
+
+if ( ! function_exists( 'set_transient' ) ) {
+	function set_transient( $key, $value ) {
+		$GLOBALS['wp_seen_posts_test_transients'][ $key ] = $value;
+		return true;
 	}
 }
 
@@ -249,6 +265,16 @@ if (
 	|| false !== strpos( $markup, 'dashicons' )
 ) {
 	fwrite( STDERR, 'Accessible inline-eye markup verification failed.' . PHP_EOL );
+	exit( 1 );
+}
+
+$hot_markup = Public_Counts::counter_markup( 7 );
+if (
+	false === strpos( $hot_markup, 'data-weekly-hot="true"' )
+	|| false === strpos( $hot_markup, '<span class="wp-seen-posts-weekly-hot" aria-hidden="true">🔥</span><svg' )
+	|| false === strpos( $hot_markup, 'aria-label="Top 7 this week. Unseen. Seen by 43 visitors"' )
+) {
+	fwrite( STDERR, 'Weekly-hot counter markup verification failed.' . PHP_EOL );
 	exit( 1 );
 }
 

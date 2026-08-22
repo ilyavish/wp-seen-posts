@@ -26,12 +26,14 @@ function boot(options = {}) {
 		maxBatchSize: options.maxBatchSize || 25,
 		batchDelay: 100,
 		initialCounts: options.initialCounts || {},
+		weeklyHotPostIds: options.weeklyHotPostIds || [],
 		ledgerStorageKey: 'wp_seen_posts_counted_v1',
 		historyStorageKey: 'wp_seen_posts_v1',
 		labelSingular: 'Seen by %s visitor',
 		labelPlural: 'Seen by %s visitors',
 		personalSeen: 'Seen',
-		personalUnseen: 'Unseen'
+		personalUnseen: 'Unseen',
+		weeklyHotLabel: 'Top 7 this week'
 	};
 	window.fetch = (url, request) => {
 		const ids = JSON.parse(request.body).post_ids;
@@ -60,6 +62,21 @@ test('restores a theme-stripped counter immediately from the prefetched page tot
 	assert.equal(wrap.querySelector('.wp-seen-posts-public-count').dataset.seenCountPending, undefined);
 	await window.WPSeenPublicCounts.flushReads();
 	assert.equal(requests.length, 0);
+});
+
+test('restores a cached weekly-hot fire before the eye with an accessible explanation', () => {
+	const { window } = boot({
+		markup: '<article id="post-22"></article>',
+		initialCounts: { 22: 43 },
+		weeklyHotPostIds: [22]
+	});
+	const wrap = window.WPSeenPublicCounts.ensure(window.document.querySelector('#post-22'), 22);
+	const node = wrap.querySelector('.wp-seen-posts-public-count');
+	assert.equal(node.children[0].classList.contains('wp-seen-posts-weekly-hot'), true);
+	assert.equal(node.children[0].textContent, '🔥');
+	assert.equal(node.children[1].classList.contains('wp-seen-posts-public-eye'), true);
+	assert.equal(node.dataset.weeklyHot, 'true');
+	assert.equal(node.getAttribute('aria-label'), 'Top 7 this week. Unseen. Seen by 43 visitors');
 });
 
 test('reads, but never increments, a missing infinite-scroll counter', async () => {

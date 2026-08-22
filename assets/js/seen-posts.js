@@ -403,13 +403,32 @@
 		}
 
 		function ensureCardStatus(card) {
-			var statusGroup = card.querySelector(':scope > .wp-seen-posts-card-status');
+			var content = card.querySelector('.postcontent, .entry-content, .post-content, [itemprop="articleBody"]');
+			var like = content ? content.querySelector('.wpulike') : null;
+			var actionRow = like && like.parentElement && like.parentElement.classList.contains('wp-seen-posts-card-action-row')
+				? like.parentElement
+				: null;
+			if (like && !actionRow) {
+				actionRow = document.createElement('div');
+				actionRow.className = 'wp-seen-posts-card-action-row';
+				like.parentNode.insertBefore(actionRow, like);
+				actionRow.appendChild(like);
+			}
+
+			var statusGroup = card.querySelector('.wp-seen-posts-card-status');
 			if (!statusGroup) {
 				statusGroup = document.createElement('div');
 				statusGroup.className = 'wp-seen-posts-card-status';
-				card.insertAdjacentElement('afterbegin', statusGroup);
 			}
-			card.classList.add('wp-seen-posts-position-context');
+			if (actionRow) {
+				statusGroup.classList.add('wp-seen-posts-card-status-inline');
+				if (statusGroup.parentElement !== actionRow) actionRow.appendChild(statusGroup);
+				card.classList.remove('wp-seen-posts-position-context');
+			} else {
+				statusGroup.classList.remove('wp-seen-posts-card-status-inline');
+				if (statusGroup.parentElement !== card) card.insertAdjacentElement('afterbegin', statusGroup);
+				card.classList.add('wp-seen-posts-position-context');
+			}
 			return statusGroup;
 		}
 
@@ -551,10 +570,10 @@
 				card.removeAttribute('aria-hidden');
 				card.dataset.seenPostState = 'unseen';
 				if (publicCounts && typeof publicCounts.setPersonalState === 'function') publicCounts.setPersonalState(card, false);
-				var statusGroup = card.querySelector(':scope > .wp-seen-posts-card-status');
+				var statusGroup = card.querySelector('.wp-seen-posts-card-status');
 				if (statusGroup && !statusGroup.querySelector('.wp-seen-posts-public-count-wrap')) statusGroup.remove();
-				if (card.querySelector(':scope > .wp-seen-posts-card-status')) card.classList.add('wp-seen-posts-position-context');
-				else card.classList.remove('wp-seen-posts-position-context');
+				var remainingStatus = card.querySelector('.wp-seen-posts-card-status');
+				card.classList.toggle('wp-seen-posts-position-context', Boolean(remainingStatus && !remainingStatus.classList.contains('wp-seen-posts-card-status-inline')));
 				observer.observe(card);
 			});
 			updateUi();

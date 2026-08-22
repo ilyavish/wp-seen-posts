@@ -15,6 +15,7 @@
 	var historyStorageKey = typeof config.historyStorageKey === 'string' && config.historyStorageKey
 		? config.historyStorageKey
 		: 'wp_seen_posts_v1';
+	var weeklyHotIds = new Set((Array.isArray(config.weeklyHotPostIds) ? config.weeklyHotPostIds : []).map(validId).filter(Boolean));
 	var ledgerPrefix = 'b1:';
 	var ledgerByteLength = 16384;
 	var ledgerBitMask = ledgerByteLength * 8 - 1;
@@ -213,14 +214,20 @@
 		var state = node && node.dataset.personalSeenState === 'seen'
 			? (config.personalSeen || 'Seen')
 			: (config.personalUnseen || 'Unseen');
-		return state + '. ' + template.replace('%s', exactNumber(count));
+		var hot = node && node.dataset.weeklyHot === 'true'
+			? (config.weeklyHotLabel || 'Top 7 this week') + '. '
+			: '';
+		return hot + state + '. ' + template.replace('%s', exactNumber(count));
 	}
 
 	function pendingLabel(node) {
 		var state = node && node.dataset.personalSeenState === 'seen'
 			? (config.personalSeen || 'Seen')
 			: (config.personalUnseen || 'Unseen');
-		return state + '. ' + (config.loadingLabel || 'Loading Seen count');
+		var hot = node && node.dataset.weeklyHot === 'true'
+			? (config.weeklyHotLabel || 'Top 7 this week') + '. '
+			: '';
+		return hot + state + '. ' + (config.loadingLabel || 'Loading Seen count');
 	}
 
 	function parsedCount(value) {
@@ -228,6 +235,18 @@
 		if (!/^\d+$/.test(value)) return null;
 		var count = Number(value);
 		return Number.isSafeInteger(count) && count >= 0 ? count : null;
+	}
+
+	function ensureHotMarker(node, id) {
+		var isHot = node.dataset.weeklyHot === 'true' || weeklyHotIds.has(id);
+		var marker = node.querySelector('.wp-seen-posts-weekly-hot');
+		node.dataset.weeklyHot = isHot ? 'true' : 'false';
+		if (!isHot || marker) return;
+		marker = document.createElement('span');
+		marker.className = 'wp-seen-posts-weekly-hot';
+		marker.setAttribute('aria-hidden', 'true');
+		marker.textContent = '🔥';
+		node.insertBefore(marker, node.firstChild);
 	}
 
 	function createCounter(id, count) {
@@ -238,6 +257,8 @@
 		node.setAttribute('role', 'img');
 		node.dataset.seenPostId = id;
 		node.dataset.personalSeenState = 'unseen';
+		node.dataset.weeklyHot = weeklyHotIds.has(id) ? 'true' : 'false';
+		ensureHotMarker(node, id);
 
 		var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 		svg.setAttribute('class', 'wp-seen-posts-public-eye');
@@ -276,6 +297,7 @@
 		if (!node || node.nodeType !== 1) return;
 		var id = validId(node.dataset.seenPostId);
 		if (!id) return;
+		ensureHotMarker(node, id);
 		if (node.dataset.personalSeenState !== 'seen') node.dataset.personalSeenState = 'unseen';
 		node.classList.toggle('wp-seen-posts-public-count-is-seen', node.dataset.personalSeenState === 'seen');
 		if (!nodesById.has(id)) nodesById.set(id, new Set());

@@ -17,9 +17,6 @@ final class Top_Seen_Widget extends \WP_Widget {
 	public const DEFAULT_LIMIT = 5;
 	public const MAX_LIMIT     = 10;
 
-	/** @var array<string,array<int,array{post_id:int,seen_count:int}>> */
-	private static $request_cache = array();
-
 	/** Configure the legacy widget, which also appears in the block Widgets screen. */
 	public function __construct() {
 		parent::__construct(
@@ -134,54 +131,16 @@ final class Top_Seen_Widget extends \WP_Widget {
 	 * @return array<int,array{post_id:int,seen_count:int}>
 	 */
 	public static function get_ranked_rows( string $period, int $limit ): array {
-		global $wpdb;
-
-		$period = array_key_exists( $period, self::period_options() ) ? $period : 'week';
-		$limit  = max( 1, min( self::MAX_LIMIT, $limit ) );
-		$range  = self::date_range( $period );
-		$key    = md5( implode( '|', array( $period, $range['start'], $range['end'], (string) $limit ) ) );
-		if ( isset( self::$request_cache[ $key ] ) ) {
-			return self::$request_cache[ $key ];
-		}
-
-		$transient_key = 'wp_seen_top_' . $key;
-		$cached        = get_transient( $transient_key );
-		if ( false !== $cached && is_array( $cached ) ) {
-			self::$request_cache[ $key ] = self::normalize_rows( $cached );
-			return self::$request_cache[ $key ];
-		}
-
-		$daily_table = Public_Counts::daily_table_name();
-		$sql         = "SELECT d.post_id, SUM(d.seen_count) AS seen_count, MAX(d.view_date) AS latest_seen
-			FROM {$daily_table} d
-			INNER JOIN {$wpdb->posts} p ON p.ID = d.post_id
-			WHERE d.view_date BETWEEN %s AND %s
-				AND p.post_status = 'publish'
-				AND p.post_type = 'post'
-			GROUP BY d.post_id
-			ORDER BY seen_count DESC, latest_seen DESC, d.post_id DESC
-			LIMIT %d";
-		$raw_rows    = (array) $wpdb->get_results(
-			$wpdb->prepare( $sql, $range['start'], $range['end'], $limit ),
-			ARRAY_A
-		);
-		$rows        = self::normalize_rows( $raw_rows );
-		/** Filters ranked Top Seen widget rows after validation. */
-		$rows        = self::normalize_rows( (array) apply_filters( 'wp_seen_posts_top_widget_rows', $rows, $period, $limit ) );
-		$ttl         = max( 30, (int) apply_filters( 'wp_seen_posts_top_widget_cache_seconds', 300, $period ) );
-		set_transient( $transient_key, $rows, $ttl );
-		self::$request_cache[ $key ] = $rows;
-
-		return $rows;
+		return Public_Counts::ranked_posts( $period, $limit );
 	}
 
 	/** Normalize all widget settings, including defaults. */
 	private static function sanitize_instance( array $instance ): array {
 		$periods  = self::period_options();
 		$displays = self::display_options();
-		$period  = isset( $instance['period'] ) && array_key_exists( $instance['period'], $periods ) ? $instance['period'] : 'week';
-		$display = isset( $instance['display'] ) && array_key_exists( $instance['display'], $displays ) ? $instance['display'] : 'text';
-		$limit   = isset( $instance['limit'] ) ? (int) $instance['limit'] : self::DEFAULT_LIMIT;
+		$period   = isset( $instance['period'] ) && array_key_exists( $instance['period'], $periods ) ? $instance['period'] : 'week';
+		$display  = isset( $instance['display'] ) && array_key_exists( $instance['display'], $displays ) ? $instance['display'] : 'text';
+		$limit    = isset( $instance['limit'] ) ? (int) $instance['limit'] : self::DEFAULT_LIMIT;
 
 		return array(
 			'title'   => isset( $instance['title'] ) ? sanitize_text_field( $instance['title'] ) : __( 'Top Seen Posts', 'wp-seen-posts' ),
@@ -207,33 +166,6 @@ final class Top_Seen_Widget extends \WP_Widget {
 			'image' => __( 'Image list', 'wp-seen-posts' ),
 			'grid'  => __( 'Image grid', 'wp-seen-posts' ),
 		);
-	}
-
-	/** Return inclusive site-local calendar dates for one ranking window. */
-	private static function date_range( string $period ): array {
-		$end  = current_datetime()->setTime( 0, 0, 0 );
-		$days = 'today' === $period ? 1 : ( 'month' === $period ? 30 : 7 );
-		return array(
-			'start' => $end->modify( '-' . ( $days - 1 ) . ' days' )->format( 'Y-m-d' ),
-			'end'   => $end->format( 'Y-m-d' ),
-		);
-	}
-
-	/** Reject malformed cache or database rows. */
-	private static function normalize_rows( array $rows ): array {
-		$clean = array();
-		foreach ( $rows as $row ) {
-			$row = is_object( $row ) ? get_object_vars( $row ) : $row;
-			if ( ! is_array( $row ) || empty( $row['post_id'] ) || empty( $row['seen_count'] ) ) {
-				continue;
-			}
-			$post_id = absint( $row['post_id'] );
-			$count   = max( 0, (int) $row['seen_count'] );
-			if ( $post_id && $count ) {
-				$clean[] = array( 'post_id' => $post_id, 'seen_count' => $count );
-			}
-		}
-		return $clean;
 	}
 
 	/** Render one ranked post link. */

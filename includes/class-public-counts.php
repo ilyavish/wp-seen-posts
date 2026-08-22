@@ -22,11 +22,19 @@ final class Public_Counts {
 	public const REST_READ_ROUTE       = '/counts/read';
 	public const MAX_BATCH_SIZE        = 25;
 	public const DAILY_RETENTION_DAYS  = 400;
+	public const RANKING_MAX_LIMIT     = 10;
+	public const WEEKLY_HOT_LIMIT      = 7;
 	public const CLEANUP_HOOK          = 'wp_seen_posts_prune_daily';
 	public const RENDER_PRIORITY       = PHP_INT_MAX;
 
 	/** @var array<int,int> Request-local lifetime-count cache. */
 	private static $count_cache = array();
+
+	/** @var array<string,array<int,array{post_id:int,seen_count:int}>> */
+	private static $ranking_request_cache = array();
+
+	/** @var array<int,int>|null Request-local weekly Top 7 IDs. */
+	private static $weekly_hot_post_ids = null;
 
 	/** Register front-end rendering and the anonymous batch endpoint. */
 	public static function init(): void {
@@ -350,24 +358,100 @@ final class Public_Counts {
 
 	/** Return accessible, non-interactive Post Views Counter-style inline eye markup. */
 	public static function counter_markup( int $post_id ): string {
-		$count     = self::get_count( $post_id );
-		$formatted = self::format_compact( $count );
-		$exact     = number_format_i18n( $count );
+		$count        = self::get_count( $post_id );
+		$formatted    = self::format_compact( $count );
+		$exact        = number_format_i18n( $count );
+		$is_hot       = in_array( $post_id, self::weekly_hot_post_ids(), true );
 		$public_label = sprintf(
 			/* translators: %s: exact lifetime Seen count. */
 			_n( 'Seen by %s visitor', 'Seen by %s visitors', $count, 'wp-seen-posts' ),
 			$exact
 		);
-		$label = __( 'Unseen', 'wp-seen-posts' ) . '. ' . $public_label;
+		$label = ( $is_hot ? __( 'Top 7 this week', 'wp-seen-posts' ) . '. ' : '' )
+			. __( 'Unseen', 'wp-seen-posts' ) . '. ' . $public_label;
+		$hot_markup = $is_hot
+			? '<span class="wp-seen-posts-weekly-hot" aria-hidden="true">🔥</span>'
+			: '';
 
 		return sprintf(
-			'<div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" role="img" data-seen-post-id="%1$d" data-seen-count="%2$d" data-personal-seen-state="unseen" aria-label="%3$s" title="%3$s">%5$s<span class="wp-seen-posts-public-value" aria-hidden="true">%4$s</span></span></div>',
+			'<div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" role="img" data-seen-post-id="%1$d" data-seen-count="%2$d" data-personal-seen-state="unseen" data-weekly-hot="%6$s" aria-label="%3$s" title="%3$s">%7$s%5$s<span class="wp-seen-posts-public-value" aria-hidden="true">%4$s</span></span></div>',
 			$post_id,
 			$count,
 			esc_attr( $label ),
 			esc_html( $formatted ),
-			self::eye_svg_markup()
+			self::eye_svg_markup(),
+			$is_hot ? 'true' : 'false',
+			$hot_markup
 		);
+	}
+
+	/** Return the seven posts with the most anonymous Seen events in the last seven site-local days. */
+	public static function weekly_hot_post_ids(): array {
+		if ( is_array( self::$weekly_hot_post_ids ) ) {
+			return self::$weekly_hot_post_ids;
+		}
+
+		self::$weekly_hot_post_ids = array_map(
+			static function ( array $row ): int {
+				return $row['post_id'];
+			},
+			self::ranked_posts( 'week', self::WEEKLY_HOT_LIMIT )
+		);
+		return self::$weekly_hot_post_ids;
+	}
+
+	/**
+	 * Return published posts ranked by daily aggregate Seen counts.
+	 *
+	 * All result sizes share one ten-row cache per period, so the hot marker and
+	 * widget never repeat a ranking query during the same request or cache window.
+	 *
+	 * @return array<int,array{post_id:int,seen_count:int}>
+	 */
+	public static function ranked_posts( string $period, int $limit ): array {
+		global $wpdb;
+
+		$period = in_array( $period, array( 'today', 'week', 'month' ), true ) ? $period : 'week';
+		$limit  = max( 1, min( self::RANKING_MAX_LIMIT, $limit ) );
+		$range  = self::ranking_date_range( $period );
+		$key    = md5( implode( '|', array( $period, $range['start'], $range['end'] ) ) );
+		if ( isset( self::$ranking_request_cache[ $key ] ) ) {
+			return array_slice( self::$ranking_request_cache[ $key ], 0, $limit );
+		}
+
+		$transient_key = 'wp_seen_rank_' . $key;
+		$cached        = get_transient( $transient_key );
+		if ( false !== $cached && is_array( $cached ) ) {
+			self::$ranking_request_cache[ $key ] = self::normalize_ranking_rows( $cached );
+			return array_slice( self::$ranking_request_cache[ $key ], 0, $limit );
+		}
+
+		$daily_table = self::daily_table();
+		$sql         = "SELECT d.post_id, SUM(d.seen_count) AS seen_count, MAX(d.view_date) AS latest_seen
+			FROM {$daily_table} d
+			INNER JOIN {$wpdb->posts} p ON p.ID = d.post_id
+			WHERE d.view_date BETWEEN %s AND %s
+				AND p.post_status = 'publish'
+				AND p.post_type = 'post'
+			GROUP BY d.post_id
+			ORDER BY seen_count DESC, latest_seen DESC, d.post_id DESC
+			LIMIT %d";
+		$raw_rows    = (array) $wpdb->get_results(
+			$wpdb->prepare( $sql, $range['start'], $range['end'], self::RANKING_MAX_LIMIT ),
+			ARRAY_A
+		);
+		$rows        = self::normalize_ranking_rows( $raw_rows );
+		/** Retains the v1.2.0 widget ranking filter while sharing its result with hot markers. */
+		$rows        = self::normalize_ranking_rows( (array) apply_filters( 'wp_seen_posts_top_widget_rows', $rows, $period, self::RANKING_MAX_LIMIT ) );
+		/** Filters shared validated ranking rows used by hot markers and widgets. */
+		$rows        = self::normalize_ranking_rows( (array) apply_filters( 'wp_seen_posts_ranked_rows', $rows, $period ) );
+		$rows        = array_slice( $rows, 0, self::RANKING_MAX_LIMIT );
+		$ttl         = (int) apply_filters( 'wp_seen_posts_top_widget_cache_seconds', 300, $period );
+		$ttl         = max( 30, (int) apply_filters( 'wp_seen_posts_ranking_cache_seconds', $ttl, $period ) );
+		set_transient( $transient_key, $rows, $ttl );
+		self::$ranking_request_cache[ $key ] = $rows;
+
+		return array_slice( $rows, 0, $limit );
 	}
 
 	/** Return the dependency-free eye icon shared by counters and the widget. */
@@ -485,6 +569,33 @@ final class Public_Counts {
 	/** Public read-only table accessor used by the bundled ranking widget. */
 	public static function daily_table_name(): string {
 		return self::daily_table();
+	}
+
+	/** Return inclusive site-local calendar dates for one ranking window. */
+	private static function ranking_date_range( string $period ): array {
+		$end  = current_datetime()->setTime( 0, 0, 0 );
+		$days = 'today' === $period ? 1 : ( 'month' === $period ? 30 : 7 );
+		return array(
+			'start' => $end->modify( '-' . ( $days - 1 ) . ' days' )->format( 'Y-m-d' ),
+			'end'   => $end->format( 'Y-m-d' ),
+		);
+	}
+
+	/** Reject malformed cache, filter, or database ranking rows. */
+	private static function normalize_ranking_rows( array $rows ): array {
+		$clean = array();
+		foreach ( $rows as $row ) {
+			$row = is_object( $row ) ? get_object_vars( $row ) : $row;
+			if ( ! is_array( $row ) || empty( $row['post_id'] ) || empty( $row['seen_count'] ) ) {
+				continue;
+			}
+			$post_id = absint( $row['post_id'] );
+			$count   = max( 0, (int) $row['seen_count'] );
+			if ( $post_id && $count ) {
+				$clean[] = array( 'post_id' => $post_id, 'seen_count' => $count );
+			}
+		}
+		return $clean;
 	}
 
 	/** Render one optional decimal without locale-dependent grouping. */

@@ -94,7 +94,7 @@ if (
 }
 
 if (
-	array( '2026-08-16', '2026-08-22', 5 ) !== $GLOBALS['wpdb']->prepared[0]
+	array( '2026-08-16', '2026-08-22', 10 ) !== $GLOBALS['wpdb']->prepared[0]
 	|| false === strpos( $GLOBALS['wpdb']->queries[0], 'FROM test_hmv_seen_daily d' )
 	|| false === strpos( $GLOBALS['wpdb']->queries[0], 'INNER JOIN test_posts p' )
 	|| false === strpos( $GLOBALS['wpdb']->queries[0], 'GROUP BY d.post_id' )
@@ -107,7 +107,7 @@ if (
 Top_Seen_Widget::get_ranked_rows( 'today', 3 );
 Top_Seen_Widget::get_ranked_rows( 'month', 10 );
 if (
-	array( '2026-08-22', '2026-08-22', 3 ) !== $GLOBALS['wpdb']->prepared[1]
+	array( '2026-08-22', '2026-08-22', 10 ) !== $GLOBALS['wpdb']->prepared[1]
 	|| array( '2026-07-24', '2026-08-22', 10 ) !== $GLOBALS['wpdb']->prepared[2]
 	|| array( 300 ) !== array_values( array_unique( $GLOBALS['wp_seen_widget_ttls'] ) )
 ) {
@@ -117,8 +117,13 @@ if (
 
 $query_count = count( $GLOBALS['wpdb']->queries );
 Top_Seen_Widget::get_ranked_rows( 'week', 5 );
-if ( $query_count !== count( $GLOBALS['wpdb']->queries ) ) {
-	fwrite( STDERR, 'Request-local widget cache failed.' . PHP_EOL );
+Top_Seen_Widget::get_ranked_rows( 'week', 7 );
+$weekly_hot = Public_Counts::weekly_hot_post_ids();
+if (
+	$query_count !== count( $GLOBALS['wpdb']->queries )
+	|| array( 18, 11 ) !== $weekly_hot
+) {
+	fwrite( STDERR, 'Shared request-local ranking cache failed.' . PHP_EOL );
 	exit( 1 );
 }
 
