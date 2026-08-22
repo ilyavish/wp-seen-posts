@@ -132,6 +132,115 @@
 		var previewLoadingDelay = safeNumber(config.previewLoadingDelay, 500);
 		var previewLoadingTimer = null;
 		var previewLoadingVisible = false;
+		var unseenPrefetchPageLimit = Math.max(0, Math.min(8, Math.floor(Number(config.unseenPrefetchPageLimit) || 0)));
+		var nativeFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
+		var warmedPageResponses = new Map();
+
+		function normalizedPageUrl(value) {
+			if (typeof value !== 'string' || !value) return '';
+			try {
+				var url = new URL(value, window.location.href);
+				url.hash = '';
+				return url.origin === window.location.origin && /^https?:$/.test(url.protocol) ? url.href : '';
+			} catch (error) { return ''; }
+		}
+
+		function upcomingPageUrls(startUrl, count) {
+			var normalized = normalizedPageUrl(startUrl);
+			if (!normalized || count < 1) return [];
+			var url = new URL(normalized);
+			var pathMatch = url.pathname.match(/\/page\/(\d+)\/?$/);
+			var queryPage = url.searchParams.get('paged');
+			var firstPage = pathMatch ? Number(pathMatch[1]) : Number(queryPage);
+			if (!Number.isSafeInteger(firstPage) || firstPage < 1) return [];
+			var urls = [];
+			var trailingSlash = pathMatch && /\/$/.test(url.pathname);
+			for (var offset = 0; offset < count; offset += 1) {
+				var candidate = new URL(url.href);
+				var page = firstPage + offset;
+				if (pathMatch) {
+					candidate.pathname = candidate.pathname.replace(/\/page\/\d+\/?$/, '/page/' + page + (trailingSlash ? '/' : ''));
+				} else candidate.searchParams.set('paged', String(page));
+				urls.push(candidate.href);
+			}
+			return urls;
+		}
+
+		function requestUrl(input) {
+			if (typeof input === 'string') return normalizedPageUrl(input);
+			return input && typeof input.url === 'string' ? normalizedPageUrl(input.url) : '';
+		}
+
+		function abortError() {
+			if (typeof DOMException === 'function') return new DOMException('The operation was aborted.', 'AbortError');
+			var error = new Error('The operation was aborted.');
+			error.name = 'AbortError';
+			return error;
+		}
+
+		function waitForWarmedResponse(promise, signal) {
+			if (!signal || typeof signal.addEventListener !== 'function') return promise;
+			if (signal.aborted) return Promise.reject(abortError());
+			return new Promise(function (resolve, reject) {
+				function abort() { reject(abortError()); }
+				signal.addEventListener('abort', abort, { once: true });
+				promise.then(function (response) {
+					signal.removeEventListener('abort', abort);
+					resolve(response);
+				}, function (error) {
+					signal.removeEventListener('abort', abort);
+					reject(error);
+				});
+			});
+		}
+
+		function installWarmedFetchBridge() {
+			if (!nativeFetch) return false;
+			if (window.fetch.wpSeenPostsWarmBridge) return true;
+			// PFIS remains the only code that parses and appends pages. This bridge merely
+			// gives its ordered GET requests HTML that is already downloading or cached.
+			var bridgedFetch = function (input, options) {
+				var method = options && options.method
+					? String(options.method).toUpperCase()
+					: (input && input.method ? String(input.method).toUpperCase() : 'GET');
+				var url = 'GET' === method ? requestUrl(input) : '';
+				var warmed = url ? warmedPageResponses.get(url) : null;
+				if (!warmed) return nativeFetch(input, options);
+				warmedPageResponses.delete(url);
+				var signal = options && options.signal ? options.signal : null;
+				return waitForWarmedResponse(warmed, signal).then(function (response) {
+					return response.clone();
+				}).catch(function (error) {
+					if (signal && signal.aborted) throw error;
+					return nativeFetch(input, options);
+				});
+			};
+			bridgedFetch.wpSeenPostsWarmBridge = true;
+			try { window.fetch = bridgedFetch; } catch (error) { return false; }
+			return window.fetch === bridgedFetch;
+		}
+
+		function warmUpcomingPages(startUrl) {
+			if (!nativeFetch || unseenPrefetchPageLimit < 1 || warmedPageResponses.size) return;
+			var pageSize = Math.max(1, initialPostIds.length);
+			var estimatedPages = Math.max(1, Math.ceil(historyAtLoad.size / pageSize));
+			var urls = upcomingPageUrls(startUrl, Math.min(unseenPrefetchPageLimit, estimatedPages));
+			if (!urls.length || !installWarmedFetchBridge()) return;
+			urls.forEach(function (url) {
+				var request = nativeFetch(url, {
+					credentials: 'same-origin',
+					headers: { Accept: 'text/html' }
+				}).then(function (response) {
+					if (!response || !response.ok || typeof response.clone !== 'function') throw new Error('Unseen-page prefetch failed.');
+					return response;
+				}).catch(function (error) {
+					warmedPageResponses.delete(url);
+					throw error;
+				});
+				warmedPageResponses.set(url, request);
+				request.catch(function () {});
+			});
+		}
 
 		function flushHistory(forcePrune) {
 			if (historyWriteTimer) window.clearTimeout(historyWriteTimer);
@@ -394,7 +503,10 @@
 			if (hasVisibleCard) return;
 
 			var loadMore = document.querySelector('.wp-pfis-load-more:not([aria-disabled="true"]):not(:disabled)');
-			if (loadMore) loadMore.click();
+			if (loadMore) {
+				warmUpcomingPages(loadMore.href || loadMore.getAttribute('href') || '');
+				loadMore.click();
+			}
 		}
 
 		function continueFeedIfNeeded() {

@@ -4,7 +4,7 @@ Tags: seen posts, unread, popular posts, analytics, p2
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,7 +18,7 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Adapts the visibility measurement for posts taller than the viewport.
 * Keeps newly Seen posts visible for the rest of the current page session to prevent scroll-time layout shifts.
 * Shows one compact caught-up status only when no more archive pages remain.
-* Automatically skips fully Seen pages through the companion infinite-scroll control.
+* Downloads a bounded batch of fully Seen archive pages in parallel, while the companion infinite-scroll control still inserts them in order.
 * Keeps two recent Seen cards visible as a stable preview if a reload would otherwise look empty.
 * Shows “Finding unseen posts…” only when background loading behind that preview takes longer than 500 milliseconds.
 * Uses one subtle bottom-right eye/count per card: gray for personally Unseen and fully opaque for Seen.
@@ -58,6 +58,11 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.2.2 =
+* Removes serial archive-network waits for returning visitors by warming up to six same-origin pages in parallel when the loaded feed is entirely Seen.
+* Preserves the companion loader's exact page order and parsing path, and falls back to its normal request if any warmed response fails.
+* Avoids warm-up traffic whenever an Unseen card is already visible and keeps the stable two-card preview throughout the search.
 
 = 1.2.1 =
 * Adds an accessible fire indicator for posts currently ranked in the Top 7 over the last seven site-local days.

@@ -44,13 +44,16 @@ async function boot(history = {}, options = {}) {
 		<ul id="postlist">
 			${postMarkup}
 		</ul>
-		<div class="wp-pfis-controls"><button class="wp-pfis-load-more">Load more</button><div class="wp-pfis-sentinel"></div></div>
+		<div class="wp-pfis-controls"><a href="${options.nextPageUrl || 'https://example.com/page/2/'}" class="wp-pfis-load-more">Load more</a><div class="wp-pfis-sentinel"></div></div>
 	</main></body></html>`, { url: 'https://example.com/', runScripts: 'outside-only' });
 	const { window } = dom;
 	Object.defineProperty(window.document, 'visibilityState', { value: 'visible', configurable: true });
 	window.localStorage.setItem('wp_seen_posts_v1', JSON.stringify(history));
 	let loadMoreClicks = 0;
-	window.document.querySelector('.wp-pfis-load-more').addEventListener('click', () => { loadMoreClicks += 1; });
+	window.document.querySelector('.wp-pfis-load-more').addEventListener('click', (event) => {
+		event.preventDefault();
+		loadMoreClicks += 1;
+	});
 	const observers = [];
 	window.IntersectionObserver = class {
 		constructor(callback) { this.callback = callback; this.observed = new Set(); observers.push(this); }
@@ -82,6 +85,7 @@ async function boot(history = {}, options = {}) {
 		dwellTime: 5, hasMorePages: options.hasMorePages ?? false,
 		reloadPreviewCount: options.reloadPreviewCount ?? 2,
 		previewLoadingDelay: options.previewLoadingDelay ?? 500,
+		unseenPrefetchPageLimit: options.unseenPrefetchPageLimit ?? 0,
 		maxEntries: 3000, retentionDays: 365, badges: badges(), i18n: strings()
 	};
 	window.confirm = () => true;
@@ -551,6 +555,93 @@ test('allows half a viewport to qualify an exceptionally tall post', async () =>
 	observer.trigger(tallCard, 0.3, 100, 2000, window.innerHeight * 0.5);
 	await new Promise((resolve) => window.setTimeout(resolve, 10));
 	assert.equal(tallCard.dataset.seenPostState, 'seen');
+});
+
+test('warms consecutive Seen archive pages in parallel for a returning visitor', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 50 }, (_, index) => [String(index + 1), now]));
+	const requests = [];
+	const resolvers = new Map();
+	function responseFor(url) {
+		return {
+			ok: true,
+			clone: () => responseFor(url),
+			text: () => Promise.resolve(`<html data-source="${url}"></html>`)
+		};
+	}
+	const { window } = await boot(history, {
+		postCount: 10,
+		hasMorePages: true,
+		unseenPrefetchPageLimit: 6,
+		beforeEval(currentWindow) {
+			currentWindow.fetch = (input) => {
+				const url = String(input);
+				requests.push(url);
+				return new Promise((resolve) => { resolvers.set(url, resolve); });
+			};
+		}
+	});
+
+	assert.deepEqual(requests, [
+		'https://example.com/page/2/',
+		'https://example.com/page/3/',
+		'https://example.com/page/4/',
+		'https://example.com/page/5/',
+		'https://example.com/page/6/'
+	]);
+	const warmed = window.fetch('https://example.com/page/2/', { method: 'GET' });
+	assert.equal(requests.length, 5);
+	resolvers.get('https://example.com/page/2/')(responseFor('https://example.com/page/2/'));
+	const response = await warmed;
+	assert.equal(await response.text(), '<html data-source="https://example.com/page/2/"></html>');
+	assert.equal(requests.length, 5);
+});
+
+test('falls back to the normal archive request when a warmed response fails', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 20 }, (_, index) => [String(index + 1), now]));
+	const requests = [];
+	let rejectWarmRequest;
+	function responseFor(url) {
+		return { ok: true, clone: () => responseFor(url), text: () => Promise.resolve(url) };
+	}
+	const { window } = await boot(history, {
+		postCount: 10,
+		hasMorePages: true,
+		unseenPrefetchPageLimit: 6,
+		beforeEval(currentWindow) {
+			currentWindow.fetch = (input) => {
+				const url = String(input);
+				requests.push(url);
+				if ('https://example.com/page/2/' === url && 1 === requests.filter((item) => item === url).length) {
+					return new Promise((resolve, reject) => { rejectWarmRequest = reject; });
+				}
+				return Promise.resolve(responseFor(url));
+			};
+		}
+	});
+
+	const recovered = window.fetch('https://example.com/page/2/', { method: 'GET' });
+	rejectWarmRequest(new Error('network failure'));
+	assert.equal(await (await recovered).text(), 'https://example.com/page/2/');
+	assert.equal(requests.filter((url) => url === 'https://example.com/page/2/').length, 2);
+});
+
+test('does not warm archive pages while an Unseen card is already visible', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const requests = [];
+	await boot(Object.fromEntries(Array.from({ length: 9 }, (_, index) => [String(index + 1), now])), {
+		postCount: 10,
+		hasMorePages: true,
+		unseenPrefetchPageLimit: 6,
+		beforeEval(currentWindow) {
+			currentWindow.fetch = (input) => {
+				requests.push(String(input));
+				return Promise.resolve({ ok: true, clone() { return this; } });
+			};
+		}
+	});
+	assert.deepEqual(requests, []);
 });
 
 test('replaces the immediate loading status with caught up only after the feed is exhausted', async () => {

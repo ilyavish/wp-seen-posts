@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks Seen posts, hides them on later feed visits, and provides anonymous public counters and Top Seen rankings.
- * Version:           1.2.1
+ * Version:           1.2.2
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.2.1';
+const VERSION = '1.2.2';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
@@ -278,18 +278,19 @@ function enqueue_assets(): void {
 	);
 
 	$config = array(
-		'theme'              => $theme_id,
-		'selectors'          => Settings::get_selectors(),
-		'storageKey'         => 'wp_seen_posts_v1',
-		'threshold'          => 0.5,
-		'dwellTime'          => 1000,
-		'reloadPreviewCount' => 2,
-		'previewLoadingDelay' => 500,
-		'hasMorePages'       => $has_more_pages,
-		'maxEntries'         => $limits['max_entries'],
-		'retentionDays'      => $limits['retention_days'],
-		'badges'             => achievement_badges(),
-		'i18n'               => array(
+		'theme'                   => $theme_id,
+		'selectors'               => Settings::get_selectors(),
+		'storageKey'              => 'wp_seen_posts_v1',
+		'threshold'               => 0.5,
+		'dwellTime'               => 1000,
+		'reloadPreviewCount'      => 2,
+		'previewLoadingDelay'     => 500,
+		'unseenPrefetchPageLimit' => 6,
+		'hasMorePages'            => $has_more_pages,
+		'maxEntries'              => $limits['max_entries'],
+		'retentionDays'           => $limits['retention_days'],
+		'badges'                  => achievement_badges(),
+		'i18n'                    => array(
 			'showSeen'       => __( 'Show seen', 'wp-seen-posts' ),
 			'hideSeen'       => __( 'Hide seen', 'wp-seen-posts' ),
 			'reset'          => __( 'Reset seen history', 'wp-seen-posts' ),

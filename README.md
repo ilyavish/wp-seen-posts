@@ -13,7 +13,8 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - A tiny head bootstrap validates retention and size limits before pre-hiding stored Seen cards during parsing, preventing both a full-feed flash and transient hiding from expired history.
 - On an all-Seen P2 or Query Loop page, that same bootstrap keeps the two-card preview visible before footer scripts run.
 - A compact caught-up status appears only after pagination is genuinely exhausted; the toolbar remains the single reveal control.
-- If a loaded page contains only previously Seen posts, the companion Load More control is triggered automatically until unseen content or the true end is reached.
+- If a loaded page contains only previously Seen posts, up to six same-origin archive pages are downloaded in parallel; the companion loader still parses and inserts them in exact order until unseen content or the true end is reached.
+- Failed or unsupported warm-up requests fall back to the companion loader's normal fetch, and no warm-up runs while an Unseen card is already available.
 - During an automatic advance with no preview available, a compact “Loading unseen posts…” status appears instead of an unexplained empty feed.
 - If a reload would otherwise contain no visible cards, two recent Seen cards remain as a stable preview while unseen pages load, avoiding both blank waits and live removal.
 - If that background search takes longer than 500 ms, a compact fixed “Finding unseen posts…” status appears without changing the feed height; fast loads never flash it.
