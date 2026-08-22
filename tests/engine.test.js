@@ -408,6 +408,38 @@ test('does not hide posts that become Seen after Show seen is closed', async () 
 	assert.equal(thirdCard.getAttribute('aria-hidden'), 'false');
 });
 
+test('Show and Hide Seen never queue public analytics increments', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const queued = [];
+	const { window } = await boot({ 1: now, 2: now }, {
+		publicCounts: {
+			queue: (id) => queued.push(id),
+			register() {},
+			setPersonalState() {}
+		}
+	});
+	const toggle = window.document.querySelector('.wp-seen-posts-toggle');
+	toggle.click();
+	toggle.click();
+	assert.deepEqual(queued, []);
+});
+
+test('Show Seen is temporary and a reload returns to hidden history with previews', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = { 1: now, 2: now, 3: now, 4: now };
+	const first = await boot(history, { postCount: 4 });
+	first.window.document.querySelector('.wp-seen-posts-toggle').click();
+	assert.equal(first.window.document.querySelector('.wp-seen-posts-toggle').textContent, 'Hide seen');
+	assert.equal(first.window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 0);
+
+	const reloaded = await boot(history, { postCount: 4 });
+	const toggle = reloaded.window.document.querySelector('.wp-seen-posts-toggle');
+	assert.equal(toggle.textContent, 'Show seen (4)');
+	assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+	assert.equal(reloaded.window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 2);
+	assert.equal(reloaded.window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
+});
+
 test('unlocks the beer milestone in the top shelf with a brief, explained achievement', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const { window, observer } = await boot({ 1: now, 2: now, 3: now, 4: now }, { postCount: 5 });
@@ -585,7 +617,18 @@ test('never flashes the finding-unseen status when unseen content arrives quickl
 
 test('reset clears only Seen history and re-observes loaded cards', async () => {
 	const now = Math.floor(Date.now() / 1000);
-	const { window, observer } = await boot({ 1: now });
+	let preserved = 0;
+	const { window, observer } = await boot({ 1: now }, {
+		publicCounts: {
+			preserveHistoryBeforeReset() { preserved += 1; },
+			register() {},
+			setPersonalState(root, seen) {
+				root.querySelectorAll('.wp-seen-posts-public-count').forEach((node) => {
+					node.dataset.personalSeenState = seen ? 'seen' : 'unseen';
+				});
+			}
+		}
+	});
 	window.localStorage.setItem('unrelated', 'keep');
 	window.document.querySelector('.wp-seen-posts-reset').click();
 	const oldCard = window.document.querySelector('#prologue-1');
@@ -596,4 +639,5 @@ test('reset clears only Seen history and re-observes loaded cards', async () => 
 	assert.equal(oldCard.classList.contains('wp-seen-posts-position-context'), true);
 	assert.equal(oldCard.querySelector('.wp-seen-posts-public-count').dataset.personalSeenState, 'unseen');
 	assert.equal(observer.observed.has(oldCard), true);
+	assert.equal(preserved, 1);
 });

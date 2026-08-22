@@ -170,6 +170,16 @@ test('migrates existing Seen history into lifetime deduplication without backfil
 	assert.equal(existing.window.localStorage.getItem('wp_seen_posts_counted_v1').startsWith('b1:'), true);
 });
 
+test('a fast history reset cannot make a previously counted post increment again', async () => {
+	const existing = boot({ history: { 7: Math.floor(Date.now() / 1000) } });
+	existing.window.WPSeenPublicCounts.preserveHistoryBeforeReset();
+	existing.window.localStorage.removeItem('wp_seen_posts_v1');
+	existing.window.WPSeenPublicCounts.queue(7);
+	await existing.window.WPSeenPublicCounts.flush();
+	assert.equal(existing.requests.length, 0);
+	assert.equal(existing.window.localStorage.getItem('wp_seen_posts_counted_v1').startsWith('b1:'), true);
+});
+
 test('repaints before persistence and keeps the lifetime ledger at a fixed storage size', async () => {
 	const first = boot();
 	first.window.WPSeenPublicCounts.queue(7);

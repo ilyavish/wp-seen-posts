@@ -31,7 +31,9 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - A separate fixed-size anonymous browser ledger remembers public increments after personal Seen history is reset or pruned. Its encoded storage remains about 22 KB regardless of how many pages are revisited.
 - Aggregate storage uses one lifetime row per post and one daily row per active post/site-local date. It stores no IP addresses, visitor IDs, fingerprints, referrers, or individual view events.
 - Daily aggregate buckets are retained for 400 site-local days, supporting Today/Week/Month and year-over-year trend work; one indexed daily cleanup prunes older buckets while permanent lifetime totals remain unchanged.
-- Daily aggregation uses the WordPress site timezone and indexed atomic upserts, leaving the data ready for future Today, date-range, Trending, and Rising rankings.
+- The bundled **Top Seen Posts** widget ranks published posts for Today, Last 7 Days, or Last 30 Days with text, image-list, or responsive image-grid layouts. Multiple instances can show all three periods at once.
+- Widget rankings use the WordPress site timezone, one indexed aggregate query cached for five minutes, server-rendered links/titles, and no visitor-level data.
+- Resetting personal Seen history first commits the fixed-size lifetime ledger, including if reset is tapped before its normal idle migration, so it cannot make a prior visit count twice.
 - Anonymous state is stored as `{ postId: unixTimestamp }` in `wp_seen_posts_v1`.
 - Public-count deduplication is stored separately as a bounded probabilistic bitmap in `wp_seen_posts_counted_v1`; clearing site data or changing browser/device intentionally starts a new anonymous browser identity.
 - History defaults to 365 days and 3,000 IDs. Use `WP_SEEN_POSTS_RETENTION_DAYS`, `WP_SEEN_POSTS_MAX_ENTRIES`, or their matching filters to change the limits.

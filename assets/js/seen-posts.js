@@ -529,6 +529,9 @@
 		toggle.addEventListener('click', function () { setShowSeen(!showSeen); });
 		reset.addEventListener('click', function () {
 			if (!window.confirm(config.i18n.confirmReset)) return;
+			if (publicCounts && typeof publicCounts.preserveHistoryBeforeReset === 'function') {
+				publicCounts.preserveHistoryBeforeReset();
+			}
 			if (historyWriteTimer) window.clearTimeout(historyWriteTimer);
 			historyWriteTimer = null;
 			historyDirty = false;

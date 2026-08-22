@@ -175,6 +175,14 @@
 		return true;
 	}
 
+	function preserveHistoryBeforeReset() {
+		/* Resetting personal Seen history must not reset lifetime public-count
+		 * deduplication. Complete any pending migration while the history still
+		 * exists, then persist the fixed-size ledger synchronously. */
+		ensureLedger('');
+		flushLedgerSave();
+	}
+
 	function trimDecimal(value) {
 		return value.toFixed(1).replace(/\.0$/, '');
 	}
@@ -546,6 +554,7 @@
 
 	window.WPSeenPublicCounts = {
 		ensure: ensure,
+		preserveHistoryBeforeReset: preserveHistoryBeforeReset,
 		queue: queue,
 		register: register,
 		setPersonalState: setPersonalState,

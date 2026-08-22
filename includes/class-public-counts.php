@@ -361,12 +361,18 @@ final class Public_Counts {
 		$label = __( 'Unseen', 'wp-seen-posts' ) . '. ' . $public_label;
 
 		return sprintf(
-			'<div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" role="img" data-seen-post-id="%1$d" data-seen-count="%2$d" data-personal-seen-state="unseen" aria-label="%3$s" title="%3$s"><svg class="wp-seen-posts-public-eye" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><path d="M18.3 9.5C15 4.9 8.5 3.8 3.9 7.2c-1.2.9-2.2 2.1-3 3.4.2.4.5.8.8 1.2 3.3 4.6 9.6 5.6 14.2 2.4.9-.7 1.7-1.4 2.4-2.4.3-.4.5-.8.8-1.2-.3-.4-.5-.8-.8-1.1zM10.1 7.2c.5-.5 1.3-.5 1.8 0s.5 1.3 0 1.8-1.3.5-1.8 0-.5-1.3 0-1.8zM10 14.9c-3.1 0-6-1.6-7.7-4.2C3.5 9 5.1 7.8 7 7.2c-.7.8-1 1.7-1 2.7 0 2.2 1.7 4.1 4 4.1 2.2 0 4.1-1.7 4.1-4v-.1c0-1-.4-2-1.1-2.7 1.9.6 3.5 1.8 4.7 3.5-1.7 2.6-4.6 4.2-7.7 4.2z"></path></svg><span class="wp-seen-posts-public-value" aria-hidden="true">%4$s</span></span></div>',
+			'<div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" role="img" data-seen-post-id="%1$d" data-seen-count="%2$d" data-personal-seen-state="unseen" aria-label="%3$s" title="%3$s">%5$s<span class="wp-seen-posts-public-value" aria-hidden="true">%4$s</span></span></div>',
 			$post_id,
 			$count,
 			esc_attr( $label ),
-			esc_html( $formatted )
+			esc_html( $formatted ),
+			self::eye_svg_markup()
 		);
+	}
+
+	/** Return the dependency-free eye icon shared by counters and the widget. */
+	public static function eye_svg_markup(): string {
+		return '<svg class="wp-seen-posts-public-eye" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><path d="M18.3 9.5C15 4.9 8.5 3.8 3.9 7.2c-1.2.9-2.2 2.1-3 3.4.2.4.5.8.8 1.2 3.3 4.6 9.6 5.6 14.2 2.4.9-.7 1.7-1.4 2.4-2.4.3-.4.5-.8.8-1.2-.3-.4-.5-.8-.8-1.1zM10.1 7.2c.5-.5 1.3-.5 1.8 0s.5 1.3 0 1.8-1.3.5-1.8 0-.5-1.3 0-1.8zM10 14.9c-3.1 0-6-1.6-7.7-4.2C3.5 9 5.1 7.8 7 7.2c-.7.8-1 1.7-1 2.7 0 2.2 1.7 4.1 4 4.1 2.2 0 4.1-1.7 4.1-4v-.1c0-1-.4-2-1.1-2.7 1.9.6 3.5 1.8 4.7 3.5-1.7 2.6-4.6 4.2-7.7 4.2z"></path></svg>';
 	}
 
 	/** Compact lifetime totals while preserving the exact value in accessible markup. */
@@ -474,6 +480,11 @@ final class Public_Counts {
 	private static function daily_table(): string {
 		global $wpdb;
 		return $wpdb->prefix . 'hmv_seen_daily';
+	}
+
+	/** Public read-only table accessor used by the bundled ranking widget. */
+	public static function daily_table_name(): string {
+		return self::daily_table();
 	}
 
 	/** Render one optional decimal without locale-dependent grouping. */

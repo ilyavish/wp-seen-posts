@@ -1,10 +1,10 @@
 === WP Seen Posts ===
 Contributors: ilyavish
-Tags: seen posts, unread, feed, p2, infinite scroll
+Tags: seen posts, unread, popular posts, analytics, p2
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.10
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,6 +29,7 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Keeps a separate fixed-size anonymous browser ledger so repeat visits never increment the same post after personal Seen history is reset or pruned.
 * Stores only lifetime and site-local daily aggregates, with no visitor profiles or raw view events.
 * Retains 400 days of indexed daily aggregates for ranking and trends, then prunes older daily buckets without changing lifetime totals.
+* Adds a Jetpack-style Top Seen Posts widget with Today, Last 7 Days, and Last 30 Days rankings plus text, image-list, and image-grid layouts.
 * Unlocks locally bundled beer, vodka, barsetka waist bag, gopnik, and Black BMW badges at 5, 10, 20, 50, and 100 unique Seen posts.
 * Keeps future badges visibly grayed out in the top badge shelf as an unlock roadmap; post cards and single posts stay uncluttered.
 * Explains badges on hover, keyboard focus, and mobile tap, with descriptive image text and a short reduced-motion-safe unlock celebration.
@@ -45,6 +46,7 @@ It does not implement infinite scrolling, personalize WordPress queries, use coo
 1. Upload the `wp-seen-posts` directory to `/wp-content/plugins/`.
 2. Activate WP Seen Posts.
 3. P2 requires no configuration. For an unsupported theme, set selectors under Settings > Seen Posts.
+4. Optionally add **Top Seen Posts** under Appearance > Widgets. Add multiple instances for Today, Last 7 Days, and Last 30 Days.
 
 == Integration ==
 
@@ -55,6 +57,13 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.2.0 =
+* Adds a Top Seen Posts widget powered by the plugin’s anonymous daily aggregates, with Today, Last 7 Days, and Last 30 Days ranges.
+* Adds text-list, image-list, and responsive image-grid widget layouts, configurable titles, and 1–10 results.
+* Caches ranking queries for five minutes and loads widget CSS only when an instance is active.
+* Prevents a fast personal-history reset from bypassing the fixed-size lifetime public-count ledger.
+* Verifies that Show/Hide never queues analytics and that Show Seen remains a temporary view after reload.
 
 = 1.1.10 =
 * Restores eye/count markup when a P2 auto-Read More renderer strips it after WordPress content filters have completed.

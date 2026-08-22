@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
- * Description:       Tracks posts viewed in archive feeds, hides previously seen posts on later visits, and integrates with progressive infinite scrolling.
- * Version:           1.1.10
+ * Description:       Tracks Seen posts, hides them on later feed visits, and provides anonymous public counters and Top Seen rankings.
+ * Version:           1.2.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,11 +18,33 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.1.10';
+const VERSION = '1.2.0';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
 require_once __DIR__ . '/includes/class-public-counts.php';
+
+/** Load and register the widget only after WordPress initializes its widget API. */
+function register_top_seen_widget(): void {
+	require_once __DIR__ . '/includes/class-top-seen-widget.php';
+	Top_Seen_Widget::register();
+}
+add_action( 'widgets_init', __NAMESPACE__ . '\\register_top_seen_widget' );
+
+/** Load the small widget stylesheet only when a Top Seen widget is active. */
+function enqueue_widget_assets(): void {
+	if ( is_admin() || ! is_active_widget( false, false, Top_Seen_Widget::ID_BASE, true ) ) {
+		return;
+	}
+
+	wp_enqueue_style(
+		'wp-seen-posts-top-widget',
+		plugins_url( 'assets/css/top-seen-widget.css', __FILE__ ),
+		array(),
+		VERSION
+	);
+}
+add_action( 'wp_enqueue_scripts', __NAMESPACE__ . '\\enqueue_widget_assets' );
 
 /**
  * Whether Seen Posts should enhance this front-end request.
