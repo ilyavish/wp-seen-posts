@@ -37,6 +37,10 @@ function current_datetime() {
 	return new DateTimeImmutable( '2026-08-22', new DateTimeZone( 'Asia/Tbilisi' ) );
 }
 
+function get_posts() {
+	return array( 18, 17 );
+}
+
 $GLOBALS['wp_seen_widget_transients'] = array();
 $GLOBALS['wp_seen_widget_ttls']       = array();
 
@@ -68,8 +72,15 @@ class WP_Seen_Posts_Widget_DB {
 		$this->queries[] = $sql;
 		return array(
 			array( 'post_id' => 18, 'seen_count' => 41, 'latest_seen' => '2026-08-22' ),
-			array( 'post_id' => 11, 'seen_count' => 9, 'latest_seen' => '2026-08-21' ),
-			array( 'post_id' => 9, 'seen_count' => 0, 'latest_seen' => '2026-08-20' ),
+			array( 'post_id' => 17, 'seen_count' => 30, 'latest_seen' => '2026-08-22' ),
+			array( 'post_id' => 16, 'seen_count' => 20, 'latest_seen' => '2026-08-21' ),
+			array( 'post_id' => 15, 'seen_count' => 18, 'latest_seen' => '2026-08-21' ),
+			array( 'post_id' => 14, 'seen_count' => 16, 'latest_seen' => '2026-08-20' ),
+			array( 'post_id' => 13, 'seen_count' => 14, 'latest_seen' => '2026-08-20' ),
+			array( 'post_id' => 12, 'seen_count' => 12, 'latest_seen' => '2026-08-19' ),
+			array( 'post_id' => 11, 'seen_count' => 9, 'latest_seen' => '2026-08-18' ),
+			array( 'post_id' => 10, 'seen_count' => 5, 'latest_seen' => '2026-08-17' ),
+			array( 'post_id' => 9, 'seen_count' => 4, 'latest_seen' => '2026-08-16' ),
 		);
 	}
 }
@@ -86,7 +97,10 @@ $week = Top_Seen_Widget::get_ranked_rows( 'week', 5 );
 if (
 	array(
 		array( 'post_id' => 18, 'seen_count' => 41 ),
-		array( 'post_id' => 11, 'seen_count' => 9 ),
+		array( 'post_id' => 17, 'seen_count' => 30 ),
+		array( 'post_id' => 16, 'seen_count' => 20 ),
+		array( 'post_id' => 15, 'seen_count' => 18 ),
+		array( 'post_id' => 14, 'seen_count' => 16 ),
 	) !== $week
 ) {
 	fwrite( STDERR, 'Weekly ranking normalization failed.' . PHP_EOL );
@@ -121,9 +135,9 @@ Top_Seen_Widget::get_ranked_rows( 'week', 7 );
 $weekly_hot = Public_Counts::weekly_hot_post_ids();
 if (
 	$query_count !== count( $GLOBALS['wpdb']->queries )
-	|| array( 18, 11 ) !== $weekly_hot
+	|| array( 16, 15, 14, 13, 12, 11, 10 ) !== $weekly_hot
 ) {
-	fwrite( STDERR, 'Shared request-local ranking cache failed.' . PHP_EOL );
+	fwrite( STDERR, 'Discovery-focused weekly-hot filtering or shared ranking cache failed.' . PHP_EOL );
 	exit( 1 );
 }
 

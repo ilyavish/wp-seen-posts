@@ -215,7 +215,7 @@
 			? (config.personalSeen || 'Seen')
 			: (config.personalUnseen || 'Unseen');
 		var hot = node && node.dataset.weeklyHot === 'true'
-			? (config.weeklyHotLabel || 'Top 7 this week') + '. '
+			? (config.weeklyHotLabel || 'Hot this week') + '. '
 			: '';
 		return hot + state + '. ' + template.replace('%s', exactNumber(count));
 	}
@@ -225,7 +225,7 @@
 			? (config.personalSeen || 'Seen')
 			: (config.personalUnseen || 'Unseen');
 		var hot = node && node.dataset.weeklyHot === 'true'
-			? (config.weeklyHotLabel || 'Top 7 this week') + '. '
+			? (config.weeklyHotLabel || 'Hot this week') + '. '
 			: '';
 		return hot + state + '. ' + (config.loadingLabel || 'Loading Seen count');
 	}

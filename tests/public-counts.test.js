@@ -7,6 +7,7 @@ const path = require('node:path');
 const { JSDOM } = require('jsdom');
 
 const publicCounts = fs.readFileSync(path.join(__dirname, '../assets/js/public-counts.js'), 'utf8');
+const styles = fs.readFileSync(path.join(__dirname, '../assets/css/seen-posts.css'), 'utf8');
 
 function counter(id, count) {
 	return `<span class="wp-seen-posts-public-count" data-seen-post-id="${id}" data-seen-count="${count}" data-personal-seen-state="unseen" aria-label="old"><span class="wp-seen-posts-public-value">${count}</span></span>`;
@@ -33,7 +34,7 @@ function boot(options = {}) {
 		labelPlural: 'Seen by %s visitors',
 		personalSeen: 'Seen',
 		personalUnseen: 'Unseen',
-		weeklyHotLabel: 'Top 7 this week'
+		weeklyHotLabel: 'Hot this week'
 	};
 	window.fetch = (url, request) => {
 		const ids = JSON.parse(request.body).post_ids;
@@ -76,7 +77,24 @@ test('restores a cached weekly-hot fire before the eye with an accessible explan
 	assert.equal(node.children[0].textContent, '🔥');
 	assert.equal(node.children[1].classList.contains('wp-seen-posts-public-eye'), true);
 	assert.equal(node.dataset.weeklyHot, 'true');
-	assert.equal(node.getAttribute('aria-label'), 'Top 7 this week. Unseen. Seen by 43 visitors');
+	assert.equal(node.getAttribute('aria-label'), 'Hot this week. Unseen. Seen by 43 visitors');
+});
+
+test('keeps the WordPress-replaced fire emoji square and aligned with the eye', () => {
+	const dom = new JSDOM(`<!doctype html><html><head>
+		<style>img.emoji { display: inline !important; height: 1em !important; margin: 0 .07em !important; vertical-align: -.1em !important; width: 1em !important; }</style>
+		<style>${styles}</style>
+	</head><body><span class="wp-seen-posts-weekly-hot"><img class="emoji" alt="Fire"></span></body></html>`);
+	const { window } = dom;
+	const marker = window.document.querySelector('.wp-seen-posts-weekly-hot');
+	const image = marker.querySelector('img.emoji');
+	const markerStyle = window.getComputedStyle(marker);
+	const imageStyle = window.getComputedStyle(image);
+	assert.equal(markerStyle.width, '20px');
+	assert.equal(markerStyle.height, '20px');
+	assert.equal(imageStyle.width, '20px');
+	assert.equal(imageStyle.height, '20px');
+	assert.equal(imageStyle.margin, '0px');
 });
 
 test('reads, but never increments, a missing infinite-scroll counter', async () => {

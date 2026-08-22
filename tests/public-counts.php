@@ -128,6 +128,12 @@ if ( ! function_exists( 'set_transient' ) ) {
 	}
 }
 
+if ( ! function_exists( 'get_posts' ) ) {
+	function get_posts() {
+		return array( 99, 98 );
+	}
+}
+
 require_once dirname( __DIR__ ) . '/includes/class-public-counts.php';
 
 use HoldMyVodka\SeenPosts\Public_Counts;
@@ -272,7 +278,7 @@ $hot_markup = Public_Counts::counter_markup( 7 );
 if (
 	false === strpos( $hot_markup, 'data-weekly-hot="true"' )
 	|| false === strpos( $hot_markup, '<span class="wp-seen-posts-weekly-hot" aria-hidden="true">🔥</span><svg' )
-	|| false === strpos( $hot_markup, 'aria-label="Top 7 this week. Unseen. Seen by 43 visitors"' )
+	|| false === strpos( $hot_markup, 'aria-label="Hot this week. Unseen. Seen by 43 visitors"' )
 ) {
 	fwrite( STDERR, 'Weekly-hot counter markup verification failed.' . PHP_EOL );
 	exit( 1 );

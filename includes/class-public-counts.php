@@ -15,17 +15,19 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Stores anonymous aggregate counts without retaining visitor-level data.
  */
 final class Public_Counts {
-	public const SCHEMA_VERSION        = '1.1.2';
-	public const SCHEMA_VERSION_OPTION = 'wp_seen_posts_schema_version';
-	public const REST_NAMESPACE        = 'wp-seen-posts/v1';
-	public const REST_ROUTE            = '/counts';
-	public const REST_READ_ROUTE       = '/counts/read';
-	public const MAX_BATCH_SIZE        = 25;
-	public const DAILY_RETENTION_DAYS  = 400;
-	public const RANKING_MAX_LIMIT     = 10;
-	public const WEEKLY_HOT_LIMIT      = 7;
-	public const CLEANUP_HOOK          = 'wp_seen_posts_prune_daily';
-	public const RENDER_PRIORITY       = PHP_INT_MAX;
+	public const SCHEMA_VERSION         = '1.1.2';
+	public const SCHEMA_VERSION_OPTION  = 'wp_seen_posts_schema_version';
+	public const REST_NAMESPACE         = 'wp-seen-posts/v1';
+	public const REST_ROUTE             = '/counts';
+	public const REST_READ_ROUTE        = '/counts/read';
+	public const MAX_BATCH_SIZE         = 25;
+	public const DAILY_RETENTION_DAYS   = 400;
+	public const RANKING_MAX_LIMIT      = 10;
+	public const WEEKLY_HOT_LIMIT       = 7;
+	public const WEEKLY_HOT_MINIMUM     = 5;
+	public const WEEKLY_HOT_SKIP_NEWEST = 2;
+	public const CLEANUP_HOOK           = 'wp_seen_posts_prune_daily';
+	public const RENDER_PRIORITY        = PHP_INT_MAX;
 
 	/** @var array<int,int> Request-local lifetime-count cache. */
 	private static $count_cache = array();
@@ -33,7 +35,7 @@ final class Public_Counts {
 	/** @var array<string,array<int,array{post_id:int,seen_count:int}>> */
 	private static $ranking_request_cache = array();
 
-	/** @var array<int,int>|null Request-local weekly Top 7 IDs. */
+	/** @var array<int,int>|null Request-local discovery-focused weekly hot IDs. */
 	private static $weekly_hot_post_ids = null;
 
 	/** Register front-end rendering and the anonymous batch endpoint. */
@@ -367,7 +369,7 @@ final class Public_Counts {
 			_n( 'Seen by %s visitor', 'Seen by %s visitors', $count, 'wp-seen-posts' ),
 			$exact
 		);
-		$label = ( $is_hot ? __( 'Top 7 this week', 'wp-seen-posts' ) . '. ' : '' )
+		$label = ( $is_hot ? __( 'Hot this week', 'wp-seen-posts' ) . '. ' : '' )
 			. __( 'Unseen', 'wp-seen-posts' ) . '. ' . $public_label;
 		$hot_markup = $is_hot
 			? '<span class="wp-seen-posts-weekly-hot" aria-hidden="true">🔥</span>'
@@ -385,17 +387,52 @@ final class Public_Counts {
 		);
 	}
 
-	/** Return the seven posts with the most anonymous Seen events in the last seven site-local days. */
+	/**
+	 * Return up to seven established posts that are genuinely hot this week.
+	 *
+	 * The objective widget ranking remains untouched. The small fire marker skips
+	 * the two newest posts so front-page exposure does not promote itself, and it
+	 * requires enough weekly Seen events to be meaningful.
+	 */
 	public static function weekly_hot_post_ids(): array {
 		if ( is_array( self::$weekly_hot_post_ids ) ) {
 			return self::$weekly_hot_post_ids;
 		}
 
+		$skip_newest = (int) apply_filters( 'wp_seen_posts_weekly_hot_skip_newest', self::WEEKLY_HOT_SKIP_NEWEST );
+		$skip_newest = max( 0, min( self::RANKING_MAX_LIMIT - self::WEEKLY_HOT_LIMIT, $skip_newest ) );
+		$minimum     = max( 1, (int) apply_filters( 'wp_seen_posts_weekly_hot_minimum', self::WEEKLY_HOT_MINIMUM ) );
+		$excluded    = $skip_newest > 0 && function_exists( 'get_posts' )
+			? array_map(
+				'absint',
+				(array) get_posts(
+					array(
+						'post_type'              => 'post',
+						'post_status'            => 'publish',
+						'posts_per_page'         => $skip_newest,
+						'orderby'                => array( 'date' => 'DESC', 'ID' => 'DESC' ),
+						'fields'                 => 'ids',
+						'no_found_rows'          => true,
+						'ignore_sticky_posts'    => true,
+						'update_post_meta_cache' => false,
+						'update_post_term_cache' => false,
+					)
+				)
+			)
+			: array();
+		$rows        = array_values(
+			array_filter(
+				self::ranked_posts( 'week', self::RANKING_MAX_LIMIT ),
+				static function ( array $row ) use ( $excluded, $minimum ): bool {
+					return $row['seen_count'] >= $minimum && ! in_array( $row['post_id'], $excluded, true );
+				}
+			)
+		);
 		self::$weekly_hot_post_ids = array_map(
 			static function ( array $row ): int {
 				return $row['post_id'];
 			},
-			self::ranked_posts( 'week', self::WEEKLY_HOT_LIMIT )
+			array_slice( $rows, 0, self::WEEKLY_HOT_LIMIT )
 		);
 		return self::$weekly_hot_post_ids;
 	}
