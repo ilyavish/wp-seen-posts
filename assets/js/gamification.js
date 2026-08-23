@@ -71,6 +71,7 @@
 		if (!Array.isArray(value)) return [];
 		var clean = [];
 		value.forEach(function (key) {
+			if (key === 'barsetka') return;
 			if (typeof key === 'string' && /^[a-z0-9_-]+$/.test(key) && clean.indexOf(key) === -1) clean.push(key);
 		});
 		return clean.slice(0, 24);
@@ -132,9 +133,11 @@
 		try {
 			var raw = window.localStorage.getItem(storageKey);
 			var initial = normalizeState(JSON.parse(raw || '{}'));
+			var normalized = JSON.stringify(initial);
 			/* Persist the opaque token immediately so two freshly opened tabs reuse
-			 * one anonymous reader identity before either tab records a post. */
-			if (!raw) window.localStorage.setItem(storageKey, JSON.stringify(initial));
+			 * one anonymous reader identity before either tab records a post. Also
+			 * rewrite legacy state once when retired badge keys are removed. */
+			if (raw !== normalized) window.localStorage.setItem(storageKey, normalized);
 			return initial;
 		}
 		catch (error) { return normalizeState({}); }

@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks Seen posts, hides them on later feed visits, and provides anonymous public counters and Top Seen rankings.
- * Version:           1.3.0
+ * Version:           1.3.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
@@ -131,17 +131,6 @@ function achievement_badge_definitions(): array {
 			'url'         => badge_asset_url( 'vodka.png' ),
 		),
 		array(
-			'key'         => 'barsetka',
-			'type'        => 'seen_count',
-			'threshold'   => 20,
-			'label'       => __( 'Barsetka badge', 'wp-seen-posts' ),
-			'requirement' => __( 'See 20 posts', 'wp-seen-posts' ),
-			'description' => __( 'You earned the Barsetka waist bag badge for seeing 20 posts.', 'wp-seen-posts' ),
-			'locked_description' => __( 'Locked. See 20 posts to unlock the Barsetka badge.', 'wp-seen-posts' ),
-			'alt'         => __( 'Black barsetka waist bag badge earned after 20 Seen posts', 'wp-seen-posts' ),
-			'url'         => badge_asset_url( 'barsetka.png' ),
-		),
-		array(
 			'key'         => 'gopnik',
 			'type'        => 'seen_count',
 			'threshold'   => 50,
@@ -181,7 +170,20 @@ function achievement_badge_definitions(): array {
 
 	/** Filters all Seen achievement badge definitions, including streak badges. */
 	$badges = apply_filters( 'wp_seen_posts_achievement_badges', $badges );
-	return is_array( $badges ) ? array_values( $badges ) : array();
+	if ( ! is_array( $badges ) ) {
+		return array();
+	}
+
+	/* Barsetka was permanently retired in 1.3.1. Do not let stale extension
+	 * data reintroduce a sixth badge into the shelf or unlock pipeline. */
+	return array_values(
+		array_filter(
+			$badges,
+			static function ( $badge ): bool {
+				return ! is_array( $badge ) || 'barsetka' !== sanitize_key( (string) ( $badge['key'] ?? '' ) );
+			}
+		)
+	);
 }
 
 /** Return badge definitions enriched from the cached aggregate rarity map. */

@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 final class Gamification {
-	public const SCHEMA_VERSION        = '1.0.0';
+	public const SCHEMA_VERSION        = '1.0.1';
 	public const SCHEMA_VERSION_OPTION = 'wp_seen_posts_gamification_schema_version';
 	public const REST_NAMESPACE        = 'wp-seen-posts/v1';
 	public const REST_ROUTE            = '/progress';
@@ -36,7 +36,8 @@ final class Gamification {
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
-		$charset_collate = $wpdb->get_charset_collate();
+		$previous_version = (string) get_option( self::SCHEMA_VERSION_OPTION, '' );
+		$charset_collate  = $wpdb->get_charset_collate();
 		$readers_table   = self::readers_table();
 		$stats_table     = self::stats_table();
 
@@ -56,6 +57,15 @@ final class Gamification {
 
 		dbDelta( $readers_sql );
 		dbDelta( $stats_sql );
+
+		/* Version 1.3.1 permanently retired Barsetka. Remove its bounded reader
+		 * key and aggregate row once during the versioned migration, never during
+		 * an ordinary Seen event or page render. */
+		if ( $previous_version && version_compare( $previous_version, '1.0.1', '<' ) ) {
+			$wpdb->query( "UPDATE {$readers_table} SET unlocked_badges = REPLACE(unlocked_badges, ',barsetka,', ',') WHERE unlocked_badges LIKE '%,barsetka,%'" );
+			$wpdb->delete( $stats_table, array( 'stat_key' => 'badge:barsetka' ), array( '%s' ) );
+			self::clear_rarity_cache();
+		}
 
 		if ( false === get_option( self::SCHEMA_VERSION_OPTION, false ) ) {
 			add_option( self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, '', true );

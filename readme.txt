@@ -4,7 +4,7 @@ Tags: seen posts, unread, popular posts, analytics, p2
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,7 +32,7 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Adds a Jetpack-style Top Seen Posts widget with Today, Last 7 Days, and Last 30 Days rankings plus text, image-list, and image-grid layouts.
 * Keeps the widget's objective weekly ranking while its fire marker skips the two newest posts, requires five weekly Seen visitors, and highlights up to seven older weekly leaders.
 * Normalizes WordPress-replaced fire emoji artwork to a square 20×20 px box across themes and devices.
-* Unlocks locally bundled beer, vodka, barsetka waist bag, gopnik, and Black BMW badges at 5, 10, 20, 50, and 100 unique Seen posts.
+* Shows five locally bundled achievements: Beer, Vodka, Gopnik, and Black BMW at 5, 10, 50, and 100 unique Seen posts, plus the optional 4-Day Zapoi streak badge.
 * Keeps future badges visibly grayed out in the top badge shelf as an unlock roadmap; post cards and single posts stay uncluttered.
 * Explains badges on hover, keyboard focus, and mobile tap, with descriptive image text and a short reduced-motion-safe unlock celebration.
 * Completes one daily reading streak day after three unique lifetime Seen registrations by default, using the WordPress site timezone and a bounded browser-local state.
@@ -64,6 +64,10 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.3.1 =
+* Retires the Barsetka milestone and removes its old browser and aggregate state, keeping the shelf to five badges.
+* Replaces Zapoi with the supplied transparent, locally optimized artwork while retaining versioned browser caching and the existing unlock animation.
 
 = 1.3.0 =
 * Adds configurable daily reading streaks, longest-streak tracking, optional partial progress, and WordPress-timezone calendar handling.

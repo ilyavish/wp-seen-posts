@@ -38,16 +38,15 @@ $GLOBALS['wp_seen_posts_test_transients'][ Gamification::RARITY_CACHE_KEY ] = ar
 	'eligible_readers' => 1000,
 	'badge:beer'       => 270,
 	'badge:vodka'      => 84,
-	'badge:barsetka'   => 37,
-	'badge:gopnik'     => 8,
-	'badge:bmw'        => 0,
+	'badge:gopnik'     => 37,
+	'badge:bmw'        => 8,
 );
 
 $cases = array(
 	'beer'     => 'Unlocked by 27% of readers',
 	'vodka'    => 'Unlocked by 8.4% of readers',
-	'barsetka' => 'Unlocked by 3.7% of readers',
-	'gopnik'   => 'Unlocked by 0.8% of readers',
+	'gopnik'   => 'Unlocked by 3.7% of readers',
+	'bmw'      => 'Unlocked by 0.8% of readers',
 );
 foreach ( $cases as $badge_key => $expected ) {
 	$percentage = Gamification::get_badge_rarity_percentage( $badge_key );

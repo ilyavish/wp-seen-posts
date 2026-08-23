@@ -19,7 +19,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - If a reload would otherwise contain no visible cards, two recent Seen cards remain as a stable preview while unseen pages load, avoiding both blank waits and live removal.
 - If that background search takes longer than 500 ms, a compact fixed “Finding unseen posts…” status appears without changing the feed height; fast loads never flash it.
 - Each card uses only one bottom-right eye/count: a quiet gray eye means personally Unseen, and the same eye becomes fully opaque when Seen. No duplicate Seen word or post-level badge artwork is rendered.
-- The top badge shelf shows the 5, 10, 20, 50, and 100-post beer, vodka, barsetka waist bag, gopnik, and Black BMW roadmap plus the optional 4-Day Zapoi streak badge; locked badges are muted in grayscale and earned badges switch to full color.
+- The top badge shelf shows five achievements: the 5, 10, 50, and 100-post Beer, Vodka, Gopnik, and Black BMW roadmap plus the optional 4-Day Zapoi streak badge; locked badges are muted in grayscale and earned badges switch to full color.
 - Three genuinely new lifetime Seen posts complete one calendar day by default. Consecutive completed site-timezone dates grow a vodka streak, a missed date resets only the current streak, and the longest streak remains local.
 - The compact streak chip never displays a misleading zero; it shows either the current streak or optional same-day progress. Use `[seen_unseen_streak]` (alias `[wp_seen_posts_streak]`) or `seen_unseen_get_streak_display()` in a template.
 - Completing a four-day streak unlocks Zapoi once with the existing lightweight badge animation and the supplied local artwork.

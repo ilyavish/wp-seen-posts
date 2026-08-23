@@ -116,6 +116,18 @@ test('does not render a misleading zero-day indicator', () => {
 	assert.match(stored.readerToken, /^[a-f0-9]{32}$/);
 });
 
+test('removes the retired Barsetka key from legacy browser state on load', () => {
+	const app = boot({ state: {
+		readerToken: 'b'.repeat(32),
+		currentDate: '2026-08-20',
+		unlockedBadges: ['beer', 'barsetka'],
+		reportedBadges: ['barsetka']
+	} });
+	const stored = JSON.parse(app.window.localStorage.getItem('wp_seen_posts_gamification_v1'));
+	assert.deepEqual(stored.unlockedBadges, ['beer']);
+	assert.deepEqual(stored.reportedBadges, []);
+});
+
 test('fresh tabs converge on one anonymous reader token', () => {
 	const firstToken = 'f'.repeat(32);
 	const secondToken = 'a'.repeat(32);

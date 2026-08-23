@@ -24,9 +24,9 @@ function badges() {
 	return [
 		{ key: 'beer', threshold: 5, label: 'Beer badge', description: 'You earned the Beer badge for seeing 5 posts.', alt: 'Cute beer badge', url: 'https://example.com/badges/beer.png' },
 		{ key: 'vodka', threshold: 10, label: 'Vodka badge', description: 'You earned the Vodka badge for seeing 10 posts.', alt: 'Vodka bottle badge', url: 'https://example.com/badges/vodka.png' },
-		{ key: 'barsetka', threshold: 20, label: 'Barsetka badge', description: 'You earned the Barsetka waist bag badge for seeing 20 posts.', alt: 'Black barsetka waist bag badge', url: 'https://example.com/badges/barsetka.png' },
 		{ key: 'gopnik', threshold: 50, label: 'Gopnik badge', description: 'You earned the Gopnik badge for seeing 50 posts.', alt: 'Gopnik character badge', url: 'https://example.com/badges/gopnik.png' },
-		{ key: 'bmw', threshold: 100, label: 'Black BMW badge', description: 'You earned the Black BMW badge for seeing 100 posts.', alt: 'Black BMW badge', url: 'https://example.com/badges/bmw.png' }
+		{ key: 'bmw', threshold: 100, label: 'Black BMW badge', description: 'You earned the Black BMW badge for seeing 100 posts.', alt: 'Black BMW badge', url: 'https://example.com/badges/bmw.png' },
+		{ key: 'zapoi', type: 'streak', threshold: 4, label: 'Zapoi badge', requirement: '4-Day Vodka Streak', description: 'Four days straight. This is officially a zapoi.', alt: 'Zapoi badge', url: 'https://example.com/badges/zapoi.png' }
 	];
 }
 
@@ -490,7 +490,7 @@ test('unlocks the beer milestone in the top shelf with a brief, explained achiev
 	observer.trigger(fifth, 0.5);
 	await new Promise((resolve) => window.setTimeout(resolve, 10));
 	assert.equal(achievements.hidden, false);
-	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer', 'vodka', 'barsetka', 'gopnik', 'bmw']);
+	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer', 'vodka', 'gopnik', 'bmw', 'zapoi']);
 	assert.equal(achievements.querySelector('[data-badge-key="beer"]').dataset.badgeState, 'earned');
 	assert.equal(achievements.querySelector('[data-badge-key="vodka"]').dataset.badgeState, 'locked');
 	assert.equal(achievements.querySelector('img').src, 'https://example.com/badges/beer.png');
@@ -514,7 +514,7 @@ test('accumulates earned milestones only in the top roadmap', async () => {
 	const history = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [String(index + 1), now]));
 	const { window } = await boot(history);
 	const achievements = window.document.querySelector('.wp-seen-posts-achievements');
-	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer', 'vodka', 'barsetka', 'gopnik', 'bmw']);
+	assert.deepEqual([...achievements.querySelectorAll('.wp-seen-posts-achievement')].map((item) => item.dataset.badgeKey), ['beer', 'vodka', 'gopnik', 'bmw', 'zapoi']);
 	assert.equal(achievements.querySelectorAll('img').length, 5);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
 	window.document.querySelector('.wp-seen-posts-reset').click();
@@ -538,18 +538,15 @@ test('unlocks the 100-post Black BMW milestone with animation and toast', async 
 	assert.equal(hundredth.querySelector('.wp-seen-posts-badge'), null);
 });
 
-test('unlocks the 20-post Barsetka milestone with animation and explanation', async () => {
+test('has no Barsetka definition or 20-post unlock behavior', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const history = Object.fromEntries(Array.from({ length: 19 }, (_, index) => [String(index + 1), now]));
 	const { window, observer } = await boot(history, { postCount: 20 });
 	const twentieth = window.document.querySelector('#prologue-20');
 	observer.trigger(twentieth, 0.5);
 	await new Promise((resolve) => window.setTimeout(resolve, 10));
-	const barsetka = window.document.querySelector('.wp-seen-posts-achievement[data-badge-key="barsetka"]');
-	assert.equal(barsetka.classList.contains('wp-seen-posts-achievement-unlocked'), true);
-	assert.equal(barsetka.querySelector('img').src, 'https://example.com/badges/barsetka.png');
-	assert.equal(barsetka.querySelector('.wp-seen-posts-achievement-tooltip-requirement').textContent, 'You earned the Barsetka waist bag badge for seeing 20 posts.');
-	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast').textContent.includes('Barsetka waist bag badge'), true);
+	assert.equal(window.document.querySelector('[data-badge-key="barsetka"]'), null);
+	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast'), null);
 	assert.equal(twentieth.querySelector('.wp-seen-posts-badge'), null);
 });
 
