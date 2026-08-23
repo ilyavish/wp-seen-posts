@@ -19,18 +19,22 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - If a reload would otherwise contain no visible cards, two recent Seen cards remain as a stable preview while unseen pages load, avoiding both blank waits and live removal.
 - If that background search takes longer than 500 ms, a compact fixed “Finding unseen posts…” status appears without changing the feed height; fast loads never flash it.
 - Each card uses only one bottom-right eye/count: a quiet gray eye means personally Unseen, and the same eye becomes fully opaque when Seen. No duplicate Seen word or post-level badge artwork is rendered.
-- The top badge shelf always shows the 5, 10, 20, 50, and 100-post beer, vodka, barsetka waist bag, gopnik, and Black BMW roadmap; locked badges are muted in grayscale and earned badges switch to full color.
+- The top badge shelf shows the 5, 10, 20, 50, and 100-post beer, vodka, barsetka waist bag, gopnik, and Black BMW roadmap plus the optional 4-Day Zapoi streak badge; locked badges are muted in grayscale and earned badges switch to full color.
+- Three genuinely new lifetime Seen posts complete one calendar day by default. Consecutive completed site-timezone dates grow a vodka streak, a missed date resets only the current streak, and the longest streak remains local.
+- The compact streak chip never displays a misleading zero; it shows either the current streak or optional same-day progress. Use `[seen_unseen_streak]` (alias `[wp_seen_posts_streak]`) or `seen_unseen_get_streak_display()` in a template.
+- Completing a four-day streak unlocks Zapoi once with the existing lightweight badge animation and the supplied local artwork.
+- Badge tooltips can show a cached “Unlocked by … of readers” rarity line after the configured minimum sample (20 by default).
 - Badge images have descriptive alternative text. Desktop hover/focus and mobile taps show a custom explanation below the badge so P2 and Safari cannot clip it above the feed.
 - A newly unlocked milestone gets one short badge-pop animation and a compact explanatory toast, with motion disabled when the visitor requests reduced motion.
-- Pixel-art badge artwork is bundled locally at a maximum 96 px; the five small roadmap images load once at the top and use versioned URLs for reliable long-lived browser caching.
-- Feed pages preload those five images from the document head, eliminating late discovery on private-window and other cold-cache visits.
+- Pixel-art badge artwork is bundled locally at a maximum 96 px; the small roadmap images load once at the top and use versioned URLs for reliable long-lived browser caching.
+- Feed and single-post pages preload the badge images from the document head, eliminating late discovery on private-window and other cold-cache visits.
 - On the next page load, previously Seen cards start hidden and can be revealed; the two-card preview is used only when hiding everything would leave the feed empty.
 - Individual blog posts opened directly are recorded after one visible second and show only the eye/count inside the detected metadata row, right-aligned across from Like and pageviews and before newsletters or comments; WordPress pages are never tracked by default.
 - Every rendered post includes a small, accessible eye counter for its public lifetime Seen total and personal Seen/Unseen state. It updates immediately at the local Seen transition, then reconciles to the confirmed server total.
 - If a theme replaces filtered content and strips that markup (including P2 auto Read More cards), the feed restores it from prefetched totals; later infinite-scroll exceptions share one read-only batch that cannot increment analytics.
 - A new local Unseen-to-Seen transition queues its post ID for one anonymous batched REST increment; existing local history is never retroactively submitted.
 - A separate fixed-size anonymous browser ledger remembers public increments after personal Seen history is reset or pruned. Its encoded storage remains about 22 KB regardless of how many pages are revisited.
-- Aggregate storage uses one lifetime row per post and one daily row per active post/site-local date. It stores no IP addresses, visitor IDs, fingerprints, referrers, or individual view events.
+- Public count storage uses one lifetime row per post and one daily row per active post/site-local date. Rarity adds one compact salted anonymous-browser hash row and tiny aggregate stat rows; it stores no IP addresses, user agents, referrers, raw identity tokens, or individual view events.
 - Daily aggregate buckets are retained for 400 site-local days, supporting Today/Week/Month and year-over-year trend work; one indexed daily cleanup prunes older buckets while permanent lifetime totals remain unchanged.
 - The bundled **Top Seen Posts** widget ranks published posts for Today, Last 7 Days, or Last 30 Days with text, image-list, or responsive image-grid layouts. Multiple instances can show all three periods at once.
 - The widget retains the objective weekly ranking. Its discovery-focused 🔥 marker skips the two newest posts, requires at least five Seen visitors during the week, and marks up to seven older weekly leaders on feeds, archives, and single-post action rows.
@@ -42,7 +46,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - History defaults to 365 days and 3,000 IDs. Use `WP_SEEN_POSTS_RETENTION_DAYS`, `WP_SEEN_POSTS_MAX_ENTRIES`, or their matching filters to change the limits.
 - The server archive query remains untouched and cacheable. Cached HTML may show a slightly stale count until a visitor's own confirmed increment updates it.
 - Full post markup remains server-rendered; hiding is a visitor-side interaction and does not remove content from the HTML response used by search engines.
-- Achievement artwork is bundled as five optimized 96×96 transparent PNGs and renders only in the top roadmap and short milestone-unlock toast.
+- Achievement artwork is bundled locally and renders only in the top roadmap and short milestone-unlock toast.
 - The visual counter updates before the fixed-size lifetime ledger is encoded and persisted; ledger writes are coalesced and forced on page exit.
 - Feed controls retain 44 px touch targets even under P2 Resurrected's more specific button rules.
 
@@ -59,3 +63,15 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 npm install
 npm test
 ```
+
+## Streak and rarity hooks
+
+- `wp_seen_posts_streak_daily_requirement`
+- `wp_seen_posts_rarity_minimum_readers`
+- `wp_seen_posts_badge_rarity`
+- `wp_seen_posts_achievement_badges`
+- `wp_seen_posts_badge_unlocked`
+- `wp_seen_posts_reader_registered`
+- `wp_seen_posts_streak_display`
+
+The browser also dispatches `wpSeenPostsStreakUpdated` and `wpSeenPostsRaritiesUpdated` events.

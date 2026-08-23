@@ -523,9 +523,12 @@
 
 	function queue(postId) {
 		var id = validId(postId);
-		if (!id || !endpoint || queuedThisPage.has(id)) return;
+		if (!id || queuedThisPage.has(id)) return false;
 		queuedThisPage.add(id);
-		if (!rememberLifetimeCount(id)) return;
+		if (!rememberLifetimeCount(id)) return false;
+		/* This boolean is also the lightweight qualification gate for daily
+		 * streaks. The fixed-size lifetime ledger survives personal-history reset. */
+		if (!endpoint) return true;
 		writingThisPage.add(id);
 		readPending.delete(id);
 		var original = displayedCount(id);
@@ -539,6 +542,7 @@
 			flushTimer = null;
 			flush();
 		} else scheduleFlush();
+		return true;
 	}
 
 	function flushOnExit() {

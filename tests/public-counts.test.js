@@ -183,14 +183,14 @@ test('restores an immediate visual increment after an ambiguous failed request a
 
 test('does not increment a post again after a later page load in the same browser', async () => {
 	const first = boot();
-	first.window.WPSeenPublicCounts.queue(7);
+	assert.equal(first.window.WPSeenPublicCounts.queue(7), true);
 	await new Promise((resolve) => first.window.setTimeout(resolve, 0));
 	await first.window.WPSeenPublicCounts.flush();
 	assert.equal(first.requests.length, 1);
 	const ledger = first.window.localStorage.getItem('wp_seen_posts_counted_v1');
 
 	const returning = boot({ ledger });
-	returning.window.WPSeenPublicCounts.queue(7);
+	assert.equal(returning.window.WPSeenPublicCounts.queue(7), false);
 	await returning.window.WPSeenPublicCounts.flush();
 	assert.equal(returning.requests.length, 0);
 	assert.equal(returning.window.document.querySelector('.wp-seen-posts-public-value').textContent, '9');

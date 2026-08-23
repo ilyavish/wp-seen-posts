@@ -4,7 +4,7 @@ Tags: seen posts, unread, popular posts, analytics, p2
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.2.4
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -35,6 +35,11 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Unlocks locally bundled beer, vodka, barsetka waist bag, gopnik, and Black BMW badges at 5, 10, 20, 50, and 100 unique Seen posts.
 * Keeps future badges visibly grayed out in the top badge shelf as an unlock roadmap; post cards and single posts stay uncluttered.
 * Explains badges on hover, keyboard focus, and mobile tap, with descriptive image text and a short reduced-motion-safe unlock celebration.
+* Completes one daily reading streak day after three unique lifetime Seen registrations by default, using the WordPress site timezone and a bounded browser-local state.
+* Unlocks the optional Zapoi badge once after a four-day streak and keeps its animation consistent with existing achievements.
+* Shows an optional compact streak/progress chip and provides `[seen_unseen_streak]` plus a template helper.
+* Adds privacy-safe cached badge rarity after a configurable minimum sample, without scanning reader rows during page rendering.
+* Adds a Streaks & Rarity section under Settings > Seen Posts.
 * Stores anonymous history only in localStorage, with age and size pruning.
 * Supports P2 and P2 Resurrected automatically.
 * Supports Query Loop blocks and conservative classic-theme markup.
@@ -59,6 +64,13 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.3.0 =
+* Adds configurable daily reading streaks, longest-streak tracking, optional partial progress, and WordPress-timezone calendar handling.
+* Adds the 4-Day Zapoi achievement with locally cached artwork and the existing reduced-motion-safe unlock animation.
+* Adds privacy-safe badge rarity using one salted anonymous-reader row, bounded badge keys, tiny aggregate counters, and a five-minute cache.
+* Ensures reloads, Show/Hide, returning to a post, and Reset Seen history cannot advance streaks or rarity twice because qualification reuses the fixed-size lifetime ledger.
+* Adds `[seen_unseen_streak]`, `[wp_seen_posts_streak]`, `seen_unseen_get_streak_display()`, and extensibility hooks for future achievements.
 
 = 1.2.4 =
 * Makes the fire marker a discovery signal by excluding the two newest posts and requiring at least five weekly Seen visitors before awarding it.

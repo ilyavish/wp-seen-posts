@@ -80,6 +80,7 @@ async function boot(history = {}, options = {}) {
 			});
 		}
 	};
+	if (options.gamification) window.WPSeenGamification = options.gamification;
 	window.wpSeenPostsConfig = {
 		theme: 'p2', selectors: {}, storageKey: 'wp_seen_posts_v1', threshold: 0.5,
 		dwellTime: 5, hasMorePages: options.hasMorePages ?? false,
@@ -299,6 +300,27 @@ test('queues a public increment only for a new local Unseen to Seen transition',
 	assert.equal(window.document.querySelector('#prologue-1').classList.contains('wp-seen-posts-is-seen'), true);
 });
 
+test('advances streak progress only when the lifetime ledger accepts a new post', async () => {
+	const qualified = [];
+	const rejected = await boot({}, {
+		postCount: 1,
+		publicCounts: { queue: () => false, register() {}, setPersonalState() {} },
+		gamification: { mount() {}, recordSeen: (id) => qualified.push(id), isBadgeEarned: () => false }
+	});
+	rejected.observer.trigger(rejected.window.document.querySelector('#prologue-1'), 0.5);
+	await new Promise((resolve) => rejected.window.setTimeout(resolve, 10));
+	assert.deepEqual(qualified, []);
+
+	const accepted = await boot({}, {
+		postCount: 1,
+		publicCounts: { queue: () => true, register() {}, setPersonalState() {} },
+		gamification: { mount() {}, recordSeen: (id, total) => qualified.push([id, total]), isBadgeEarned: () => false }
+	});
+	accepted.observer.trigger(accepted.window.document.querySelector('#prologue-1'), 0.5);
+	await new Promise((resolve) => accepted.window.setTimeout(resolve, 10));
+	assert.deepEqual(qualified, [['1', 1]]);
+});
+
 test('uses only the public eye total at the bottom-right and changes its personal state immediately', async () => {
 	const { window, observer } = await boot({}, { postCount: 1, includePublicCounts: true });
 	const card = window.document.querySelector('#prologue-1');
@@ -462,7 +484,8 @@ test('unlocks the beer milestone in the top shelf with a brief, explained achiev
 	const achievements = window.document.querySelector('.wp-seen-posts-achievements');
 	assert.equal(achievements.hidden, false);
 	assert.equal(achievements.querySelectorAll('.wp-seen-posts-achievement-locked').length, 5);
-	assert.equal(achievements.querySelector('[data-badge-key="beer"] .wp-seen-posts-achievement-tooltip').textContent, 'Locked. See 5 posts to unlock Beer badge.');
+	assert.equal(achievements.querySelector('[data-badge-key="beer"] .wp-seen-posts-achievement-tooltip-name').textContent, 'Beer badge');
+	assert.equal(achievements.querySelector('[data-badge-key="beer"] .wp-seen-posts-achievement-tooltip-requirement').textContent, 'Locked. See 5 posts to unlock Beer badge.');
 	const fifth = window.document.querySelector('#prologue-5');
 	observer.trigger(fifth, 0.5);
 	await new Promise((resolve) => window.setTimeout(resolve, 10));
@@ -473,7 +496,7 @@ test('unlocks the beer milestone in the top shelf with a brief, explained achiev
 	assert.equal(achievements.querySelector('img').src, 'https://example.com/badges/beer.png');
 	assert.equal(achievements.querySelector('img').alt, 'Cute beer badge');
 	assert.equal(achievements.querySelector('img').decoding, 'sync');
-	assert.equal(achievements.querySelector('.wp-seen-posts-achievement-tooltip').textContent, 'You earned the Beer badge for seeing 5 posts.');
+	assert.equal(achievements.querySelector('.wp-seen-posts-achievement-tooltip-requirement').textContent, 'You earned the Beer badge for seeing 5 posts.');
 	const achievementButton = achievements.querySelector('.wp-seen-posts-achievement-button');
 	assert.equal(achievementButton.getAttribute('title'), null);
 	assert.equal(achievementButton.getAttribute('aria-describedby'), 'wp-seen-posts-tooltip-beer');
@@ -525,7 +548,7 @@ test('unlocks the 20-post Barsetka milestone with animation and explanation', as
 	const barsetka = window.document.querySelector('.wp-seen-posts-achievement[data-badge-key="barsetka"]');
 	assert.equal(barsetka.classList.contains('wp-seen-posts-achievement-unlocked'), true);
 	assert.equal(barsetka.querySelector('img').src, 'https://example.com/badges/barsetka.png');
-	assert.equal(barsetka.querySelector('.wp-seen-posts-achievement-tooltip').textContent, 'You earned the Barsetka waist bag badge for seeing 20 posts.');
+	assert.equal(barsetka.querySelector('.wp-seen-posts-achievement-tooltip-requirement').textContent, 'You earned the Barsetka waist bag badge for seeing 20 posts.');
 	assert.equal(window.document.querySelector('.wp-seen-posts-unlock-toast').textContent.includes('Barsetka waist bag badge'), true);
 	assert.equal(twentieth.querySelector('.wp-seen-posts-badge'), null);
 });

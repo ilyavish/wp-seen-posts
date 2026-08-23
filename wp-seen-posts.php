@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks Seen posts, hides them on later feed visits, and provides anonymous public counters and Top Seen rankings.
- * Version:           1.2.4
+ * Version:           1.3.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,11 +18,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.2.4';
+const VERSION = '1.3.0';
 const OPTION  = 'wp_seen_posts_selectors';
 
 require_once __DIR__ . '/includes/class-settings.php';
 require_once __DIR__ . '/includes/class-public-counts.php';
+require_once __DIR__ . '/includes/class-gamification.php';
+require_once __DIR__ . '/includes/functions.php';
 
 /** Load and register the widget only after WordPress initializes its widget API. */
 function register_top_seen_widget(): void {
@@ -102,56 +104,101 @@ function badge_asset_url( string $filename ): string {
 /**
  * Return the lightweight local milestone artwork and thresholds.
  *
- * @return array<int,array{key:string,threshold:int,label:string,description:string,alt:string,url:string}>
+ * @return array<int,array<string,mixed>>
  */
-function achievement_badges(): array {
-	return array(
+function achievement_badge_definitions(): array {
+	$badges = array(
 		array(
 			'key'         => 'beer',
+			'type'        => 'seen_count',
 			'threshold'   => 5,
 			'label'       => __( 'Beer badge', 'wp-seen-posts' ),
+			'requirement' => __( 'See 5 posts', 'wp-seen-posts' ),
 			'description' => __( 'You earned the Beer badge for seeing 5 posts.', 'wp-seen-posts' ),
+			'locked_description' => __( 'Locked. See 5 posts to unlock the Beer badge.', 'wp-seen-posts' ),
 			'alt'         => __( 'Cute beer badge earned after 5 Seen posts', 'wp-seen-posts' ),
 			'url'         => badge_asset_url( 'beer.png' ),
 		),
 		array(
 			'key'         => 'vodka',
+			'type'        => 'seen_count',
 			'threshold'   => 10,
 			'label'       => __( 'Vodka badge', 'wp-seen-posts' ),
+			'requirement' => __( 'See 10 posts', 'wp-seen-posts' ),
 			'description' => __( 'You earned the Vodka badge for seeing 10 posts.', 'wp-seen-posts' ),
+			'locked_description' => __( 'Locked. See 10 posts to unlock the Vodka badge.', 'wp-seen-posts' ),
 			'alt'         => __( 'Vodka bottle badge earned after 10 Seen posts', 'wp-seen-posts' ),
 			'url'         => badge_asset_url( 'vodka.png' ),
 		),
 		array(
 			'key'         => 'barsetka',
+			'type'        => 'seen_count',
 			'threshold'   => 20,
 			'label'       => __( 'Barsetka badge', 'wp-seen-posts' ),
+			'requirement' => __( 'See 20 posts', 'wp-seen-posts' ),
 			'description' => __( 'You earned the Barsetka waist bag badge for seeing 20 posts.', 'wp-seen-posts' ),
+			'locked_description' => __( 'Locked. See 20 posts to unlock the Barsetka badge.', 'wp-seen-posts' ),
 			'alt'         => __( 'Black barsetka waist bag badge earned after 20 Seen posts', 'wp-seen-posts' ),
 			'url'         => badge_asset_url( 'barsetka.png' ),
 		),
 		array(
 			'key'         => 'gopnik',
+			'type'        => 'seen_count',
 			'threshold'   => 50,
 			'label'       => __( 'Gopnik badge', 'wp-seen-posts' ),
+			'requirement' => __( 'See 50 posts', 'wp-seen-posts' ),
 			'description' => __( 'You earned the Gopnik badge for seeing 50 posts.', 'wp-seen-posts' ),
+			'locked_description' => __( 'Locked. See 50 posts to unlock the Gopnik badge.', 'wp-seen-posts' ),
 			'alt'         => __( 'Gopnik character badge earned after 50 Seen posts', 'wp-seen-posts' ),
 			'url'         => badge_asset_url( 'gopnik.png' ),
 		),
 		array(
 			'key'         => 'bmw',
+			'type'        => 'seen_count',
 			'threshold'   => 100,
 			'label'       => __( 'Black BMW badge', 'wp-seen-posts' ),
+			'requirement' => __( 'See 100 posts', 'wp-seen-posts' ),
 			'description' => __( 'You earned the Black BMW badge for seeing 100 posts.', 'wp-seen-posts' ),
+			'locked_description' => __( 'Locked. See 100 posts to unlock the Black BMW badge.', 'wp-seen-posts' ),
 			'alt'         => __( 'Black BMW badge earned after 100 Seen posts', 'wp-seen-posts' ),
 			'url'         => badge_asset_url( 'bmw.png' ),
 		),
 	);
+
+	if ( Settings::zapoi_enabled() ) {
+		$badges[] = array(
+			'key'         => 'zapoi',
+			'type'        => 'streak',
+			'threshold'   => 4,
+			'label'       => __( 'Zapoi badge', 'wp-seen-posts' ),
+			'requirement' => __( '4-Day Vodka Streak', 'wp-seen-posts' ),
+			'description' => __( 'Four days straight. This is officially a zapoi.', 'wp-seen-posts' ),
+			'locked_description' => __( 'Locked. Complete a 4-day reading streak to unlock the Zapoi badge.', 'wp-seen-posts' ),
+			'alt'         => __( 'Zapoi badge earned for a four-day reading streak', 'wp-seen-posts' ),
+			'url'         => badge_asset_url( 'zapoi.png' ),
+		);
+	}
+
+	/** Filters all Seen achievement badge definitions, including streak badges. */
+	$badges = apply_filters( 'wp_seen_posts_achievement_badges', $badges );
+	return is_array( $badges ) ? array_values( $badges ) : array();
 }
 
-/** Discover the five always-visible feed roadmap images before footer JavaScript builds the shelf. */
+/** Return badge definitions enriched from the cached aggregate rarity map. */
+function achievement_badges(): array {
+	$badges   = achievement_badge_definitions();
+	$rarities = Gamification::rarities_for_badges( wp_list_pluck( $badges, 'key' ) );
+	foreach ( $badges as &$badge ) {
+		$key             = isset( $badge['key'] ) ? sanitize_key( $badge['key'] ) : '';
+		$badge['rarity'] = $key && isset( $rarities[ $key ] ) ? $rarities[ $key ] : '';
+	}
+	unset( $badge );
+	return $badges;
+}
+
+/** Discover the always-visible roadmap images before footer JavaScript builds the shelf. */
 function preload_badge_assets(): void {
-	if ( ! is_supported_view() ) {
+	if ( ! is_supported_view() && ! is_trackable_single_post() ) {
 		return;
 	}
 
@@ -163,6 +210,46 @@ function preload_badge_assets(): void {
 	}
 }
 add_action( 'wp_head', __NAMESPACE__ . '\\preload_badge_assets', 2 );
+
+/** Return the small browser-side streak configuration. */
+function gamification_script_config(): array {
+	return array(
+		'enabled'          => Settings::streaks_enabled(),
+		'showProgress'     => Settings::streak_progress_enabled(),
+		'zapoiEnabled'     => Settings::zapoi_enabled(),
+		'dailyRequirement' => Settings::streak_daily_requirement(),
+		'storageKey'       => 'wp_seen_posts_gamification_v1',
+		'endpoint'         => Settings::rarity_enabled() ? rest_url( Gamification::REST_NAMESPACE . Gamification::REST_ROUTE ) : '',
+		'siteTimeZone'     => wp_timezone_string(),
+		'siteUtcOffset'    => current_datetime()->getOffset(),
+		'serverDate'       => current_time( 'Y-m-d' ),
+		'badges'           => achievement_badges(),
+		'i18n'             => array(
+			'streak'        => __( '🔥 %d-day vodka streak', 'wp-seen-posts' ),
+			'progress'      => __( '🔥 %1$d / %2$d posts to keep your streak', 'wp-seen-posts' ),
+			'progressStart' => __( '🔥 %1$d / %2$d posts toward a vodka streak', 'wp-seen-posts' ),
+		),
+	);
+}
+
+/** Enqueue streak state once; shortcode-only pages use the same lightweight file. */
+function enqueue_gamification_assets(): void {
+	static $configured = false;
+
+	if ( is_admin() ) {
+		return;
+	}
+	wp_enqueue_style( 'wp-seen-posts', plugins_url( 'assets/css/seen-posts.css', __FILE__ ), array(), VERSION );
+	wp_enqueue_script( 'wp-seen-posts-gamification', plugins_url( 'assets/js/gamification.js', __FILE__ ), array(), VERSION, true );
+	if ( ! $configured ) {
+		wp_add_inline_script(
+			'wp-seen-posts-gamification',
+			'window.wpSeenGamificationConfig = ' . wp_json_encode( gamification_script_config() ) . ';',
+			'before'
+		);
+		$configured = true;
+	}
+}
 
 /**
  * Enqueue the dependency-free feed enhancement.
@@ -188,6 +275,7 @@ function enqueue_assets(): void {
 		array(),
 		VERSION
 	);
+	enqueue_gamification_assets();
 
 	wp_enqueue_script(
 		'wp-seen-posts-public-counts',
@@ -223,7 +311,7 @@ function enqueue_assets(): void {
 		wp_enqueue_script(
 			'wp-seen-posts-single',
 			plugins_url( 'assets/js/single-post.js', __FILE__ ),
-			array( 'wp-seen-posts-public-counts' ),
+			array( 'wp-seen-posts-public-counts', 'wp-seen-posts-gamification' ),
 			VERSION,
 			true
 		);
@@ -272,7 +360,7 @@ function enqueue_assets(): void {
 	wp_enqueue_script(
 		'wp-seen-posts',
 		plugins_url( 'assets/js/seen-posts.js', __FILE__ ),
-		array( 'wp-seen-posts-adapters', 'wp-seen-posts-public-counts' ),
+		array( 'wp-seen-posts-adapters', 'wp-seen-posts-public-counts', 'wp-seen-posts-gamification' ),
 		VERSION,
 		true
 	);
@@ -345,6 +433,10 @@ function bootstrap(): void {
 	load_plugin_textdomain( 'wp-seen-posts', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 	Public_Counts::maybe_upgrade_schema();
 	Public_Counts::init();
+	Gamification::maybe_upgrade_schema();
+	Gamification::init();
+	add_shortcode( 'seen_unseen_streak', __NAMESPACE__ . '\\streak_shortcode' );
+	add_shortcode( 'wp_seen_posts_streak', __NAMESPACE__ . '\\streak_shortcode' );
 
 	if ( is_admin() ) {
 		Settings::init();
@@ -355,6 +447,7 @@ add_action( 'plugins_loaded', __NAMESPACE__ . '\\bootstrap' );
 /** Create the aggregate counter schema when the plugin is activated. */
 function activate(): void {
 	Public_Counts::install_schema();
+	Gamification::install_schema();
 }
 register_activation_hook( __FILE__, __NAMESPACE__ . '\\activate' );
 

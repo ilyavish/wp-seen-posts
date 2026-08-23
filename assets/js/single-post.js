@@ -4,6 +4,7 @@
 	var config = window.wpSeenSinglePostConfig || {};
 	var i18n = config.i18n || {};
 	var publicCounts = window.WPSeenPublicCounts;
+	var gamification = window.WPSeenGamification;
 	var postId = String(Math.floor(Number(config.postId) || 0));
 	if (!/^[1-9]\d*$/.test(postId)) return;
 
@@ -41,6 +42,7 @@
 		return config.badges.map(function (badge) {
 			return {
 				key: badge && typeof badge.key === 'string' ? badge.key : '',
+				type: badge && badge.type === 'streak' ? 'streak' : 'seen_count',
 				threshold: Math.floor(Number(badge && badge.threshold) || 0),
 				label: badge && typeof badge.label === 'string' ? badge.label : '',
 				description: badge && typeof badge.description === 'string' ? badge.description : '',
@@ -162,13 +164,25 @@
 			if (wasNew) {
 				var count = Object.keys(history).length;
 				milestones.forEach(function (milestone) {
-					if (count === milestone.threshold) unlocked = milestone;
+					if (milestone.type === 'seen_count' && count === milestone.threshold) unlocked = milestone;
 				});
 			}
 		} catch (error) {}
 		recorded = true;
 		renderStatus(true);
-		if (wasNew && publicCounts && typeof publicCounts.queue === 'function') publicCounts.queue(postId);
+		if (wasNew) {
+			var qualifies = true;
+			if (publicCounts && typeof publicCounts.queue === 'function') qualifies = publicCounts.queue(postId) !== false;
+			if (qualifies && gamification && typeof gamification.recordSeen === 'function') {
+				var result = gamification.recordSeen(postId, Object.keys(history).length);
+				if (result && Array.isArray(result.unlocked) && result.unlocked.length) {
+					var unlockedKey = result.unlocked[result.unlocked.length - 1];
+					milestones.forEach(function (milestone) {
+						if (milestone.key === unlockedKey) unlocked = milestone;
+					});
+				}
+			}
+		}
 		if (unlocked) showUnlockToast(unlocked);
 		document.dispatchEvent(new window.CustomEvent('wpSeenSinglePostRecorded', {
 			detail: { postId: postId, total: Object.keys(history).length, unlocked: unlocked ? unlocked.key : '', wasNew: wasNew }

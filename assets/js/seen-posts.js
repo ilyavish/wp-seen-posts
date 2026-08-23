@@ -4,6 +4,7 @@
 	var config = window.wpSeenPostsConfig || {};
 	var adapters = window.WPSeenPostsAdapters;
 	var publicCounts = window.WPSeenPublicCounts;
+	var gamification = window.WPSeenGamification;
 	if (!adapters || !('IntersectionObserver' in window)) return;
 
 	function safeNumber(value, fallback) {
@@ -75,15 +76,19 @@
 		return config.badges.map(function (badge) {
 			return {
 				key: badge && typeof badge.key === 'string' ? badge.key : '',
+				type: badge && badge.type === 'streak' ? 'streak' : 'seen_count',
 				threshold: Math.floor(Number(badge && badge.threshold) || 0),
 				label: badge && typeof badge.label === 'string' ? badge.label : '',
+				requirement: badge && typeof badge.requirement === 'string' ? badge.requirement : '',
 				description: badge && typeof badge.description === 'string' ? badge.description : '',
+				lockedDescription: badge && typeof badge.locked_description === 'string' ? badge.locked_description : '',
+				rarity: badge && typeof badge.rarity === 'string' ? badge.rarity : '',
 				alt: badge && typeof badge.alt === 'string' ? badge.alt : '',
 				url: badge && typeof badge.url === 'string' ? badge.url : ''
 			};
 		}).filter(function (badge) {
 			return badge.key && badge.threshold > 0 && badge.label && badge.description && badge.url;
-		}).sort(function (a, b) { return a.threshold - b.threshold; });
+		});
 	}
 
 	function init() {
@@ -126,6 +131,7 @@
 		var historyDirty = false;
 		var pendingHistory = {};
 		var achievementSignature = '';
+		var achievementRaritySignature = '';
 		var achievementsInitialized = false;
 		var milestoneToast = null;
 		var milestoneToastTimer = null;
@@ -316,6 +322,7 @@
 		achievements.appendChild(achievementsHint);
 		controls.appendChild(achievements);
 		feed.insertAdjacentElement('beforebegin', controls);
+		if (gamification && typeof gamification.mount === 'function') gamification.mount(actions);
 
 		var empty = document.createElement('p');
 		empty.className = 'wp-seen-posts-empty';
@@ -363,6 +370,7 @@
 		}
 
 		function lockedAchievementDescription(milestone) {
+			if (milestone.lockedDescription) return milestone.lockedDescription;
 			return (config.i18n.badgeLocked || 'Locked. See %1$d posts to unlock %2$s.')
 				.replace('%1$d', String(milestone.threshold))
 				.replace('%2$s', milestone.label);
@@ -378,13 +386,33 @@
 			button.type = 'button';
 			button.className = 'wp-seen-posts-achievement-button';
 			var description = earned ? milestone.description : lockedAchievementDescription(milestone);
-			button.setAttribute('aria-label', description);
+			var ariaDescription = description + (milestone.rarity ? '. ' + milestone.rarity : '');
+			button.setAttribute('aria-label', ariaDescription);
 			button.setAttribute('aria-expanded', 'false');
 			var tooltip = document.createElement('span');
 			tooltip.className = 'wp-seen-posts-achievement-tooltip';
 			tooltip.id = 'wp-seen-posts-tooltip-' + milestone.key;
 			tooltip.setAttribute('role', 'tooltip');
-			tooltip.textContent = description;
+			var tooltipName = document.createElement('strong');
+			tooltipName.className = 'wp-seen-posts-achievement-tooltip-name';
+			tooltipName.textContent = milestone.label;
+			var tooltipRequirement = document.createElement('span');
+			tooltipRequirement.className = 'wp-seen-posts-achievement-tooltip-requirement';
+			tooltipRequirement.textContent = earned ? (milestone.requirement || description) : description;
+			tooltip.appendChild(tooltipName);
+			tooltip.appendChild(tooltipRequirement);
+			if (earned && milestone.requirement && milestone.description !== milestone.requirement) {
+				var tooltipDescription = document.createElement('span');
+				tooltipDescription.className = 'wp-seen-posts-achievement-tooltip-description';
+				tooltipDescription.textContent = milestone.description;
+				tooltip.appendChild(tooltipDescription);
+			}
+			if (milestone.rarity) {
+				var tooltipRarity = document.createElement('span');
+				tooltipRarity.className = 'wp-seen-posts-achievement-rarity';
+				tooltipRarity.textContent = milestone.rarity;
+				tooltip.appendChild(tooltipRarity);
+			}
 			button.setAttribute('aria-describedby', tooltip.id);
 			button.appendChild(createMilestoneImage(milestone, 'wp-seen-posts-achievement-image', 36));
 			button.addEventListener('click', function (event) {
@@ -397,6 +425,13 @@
 			item.appendChild(button);
 			item.appendChild(tooltip);
 			return item;
+		}
+
+		function isMilestoneEarned(milestone) {
+			if (milestone.type === 'streak') {
+				return Boolean(gamification && typeof gamification.isBadgeEarned === 'function' && gamification.isBadgeEarned(milestone.key));
+			}
+			return historyEntryCount >= milestone.threshold;
 		}
 
 		function showMilestoneToast(milestone) {
@@ -428,17 +463,19 @@
 		}
 
 		function updateAchievements() {
-			var earned = milestones.filter(function (milestone) { return historyEntryCount >= milestone.threshold; });
+			var earned = milestones.filter(isMilestoneEarned);
 			var signature = earned.map(function (milestone) { return milestone.key; }).join(',');
+			var raritySignature = milestones.map(function (milestone) { return milestone.key + ':' + milestone.rarity; }).join(',');
 			var previousKeys = achievementSignature ? achievementSignature.split(',') : [];
 			var newlyEarned = achievementsInitialized ? earned.filter(function (milestone) {
 				return previousKeys.indexOf(milestone.key) === -1;
 			}) : [];
-			if (!achievementsInitialized || signature !== achievementSignature) {
+			if (!achievementsInitialized || signature !== achievementSignature || raritySignature !== achievementRaritySignature) {
 				achievementSignature = signature;
+				achievementRaritySignature = raritySignature;
 				while (achievementsList.firstChild) achievementsList.removeChild(achievementsList.firstChild);
 				milestones.forEach(function (milestone) {
-					var isEarned = historyEntryCount >= milestone.threshold;
+					var isEarned = isMilestoneEarned(milestone);
 					achievementsList.appendChild(createAchievementItem(milestone, isEarned && newlyEarned.indexOf(milestone) !== -1, isEarned));
 				});
 				achievements.hidden = milestones.length === 0;
@@ -447,6 +484,14 @@
 			if (newlyEarned.length) showMilestoneToast(newlyEarned[newlyEarned.length - 1]);
 		}
 		document.addEventListener('click', function () { closeAchievementExplanations(null); });
+		document.addEventListener('wpSeenPostsRaritiesUpdated', function (event) {
+			var rarities = event.detail && event.detail.rarities;
+			if (!rarities || typeof rarities !== 'object') return;
+			milestones.forEach(function (milestone) {
+				if (typeof rarities[milestone.key] === 'string') milestone.rarity = rarities[milestone.key];
+			});
+			updateAchievements();
+		});
 
 		function updatePreviewLoading(waiting) {
 			if (!waiting) {
@@ -552,7 +597,13 @@
 			}
 			/* Existing browser history is never backfilled. Only the same new local
 			 * transition that marks this card Seen may enter the public batch. */
-			if (wasNew && publicCounts && typeof publicCounts.queue === 'function') publicCounts.queue(id);
+			if (wasNew) {
+				var qualifies = true;
+				if (publicCounts && typeof publicCounts.queue === 'function') qualifies = publicCounts.queue(id) !== false;
+				if (qualifies && gamification && typeof gamification.recordSeen === 'function') {
+					gamification.recordSeen(id, historyEntryCount);
+				}
+			}
 			card.classList.toggle('wp-seen-posts-reload-preview', reloadPreviewIds.has(id));
 			observer.unobserve(card);
 			applyCardVisibility(card, id);
