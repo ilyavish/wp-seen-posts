@@ -31,6 +31,7 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - On the next page load, previously Seen cards start hidden and can be revealed; the two-card preview is used only when hiding everything would leave the feed empty.
 - Individual blog posts opened directly are recorded after one visible second and show only the eye/count inside the detected metadata row, right-aligned across from Like and pageviews and before newsletters or comments; WordPress pages are never tracked by default.
 - Every rendered post includes a small, accessible eye counter for its public lifetime Seen total and personal Seen/Unseen state. It updates immediately at the local Seen transition, then reconciles to the confirmed server total.
+- Cached pages show their embedded total immediately, then reconcile all visible counters through one delayed read-only batch so a successful view never appears stuck at an older value after reload.
 - If a theme replaces filtered content and strips that markup (including P2 auto Read More cards), the feed restores it from prefetched totals; later infinite-scroll exceptions share one read-only batch that cannot increment analytics.
 - A new local Unseen-to-Seen transition queues its post ID for one anonymous batched REST increment; existing local history is never retroactively submitted.
 - A separate fixed-size anonymous browser ledger remembers public increments after personal Seen history is reset or pruned. Its encoded storage remains about 22 KB regardless of how many pages are revisited.

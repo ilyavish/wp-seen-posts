@@ -29,6 +29,7 @@
 	var readAttempted = new Set();
 	var flushTimer = null;
 	var readTimer = null;
+	var reconcileTimer = null;
 	var ledgerSaveTimer = null;
 	var ledgerDirty = false;
 	var inFlight = false;
@@ -316,6 +317,18 @@
 		if (typeof root.querySelectorAll === 'function') {
 			root.querySelectorAll('.wp-seen-posts-public-count[data-seen-post-id]').forEach(rememberNode);
 		}
+		scheduleReconciliation();
+	}
+
+	function scheduleReconciliation() {
+		if (reconcileTimer || !readEndpoint || !nodesById.size) return;
+		/* Full-page caches can preserve an old server-rendered total. Keep that
+		 * immediate value for first paint, then refresh every registered counter
+		 * in one small read-only batch without delaying Seen detection. */
+		reconcileTimer = window.setTimeout(function () {
+			reconcileTimer = null;
+			nodesById.forEach(function (nodes, id) { requestRead(id); });
+		}, 200);
 	}
 
 	function ensure(root, postId) {

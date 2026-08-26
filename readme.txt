@@ -4,7 +4,7 @@ Tags: seen posts, unread, popular posts, analytics, p2
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.3.1
+Stable tag: 1.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,10 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.3.2 =
+* Reconciles cached page totals with one delayed read-only batch so newly registered views appear after reload even while a full-page cache still contains an older count.
+* Keeps the cached total available for immediate paint and prevents the reconciliation from incrementing analytics or overwriting an in-flight Seen registration.
 
 = 1.3.1 =
 * Retires the Barsetka milestone and removes its old browser and aggregate state, keeping the shelf to five badges.

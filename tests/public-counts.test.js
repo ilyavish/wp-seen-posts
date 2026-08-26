@@ -65,6 +65,20 @@ test('restores a theme-stripped counter immediately from the prefetched page tot
 	assert.equal(requests.length, 0);
 });
 
+test('quietly reconciles a stale cached total without incrementing it', async () => {
+	const { window, requests } = boot({
+		markup: counter(1424, 0),
+		readResponseCounts: { 1424: 3 }
+	});
+	const value = window.document.querySelector('.wp-seen-posts-public-value');
+	assert.equal(value.textContent, '0');
+	await new Promise((resolve) => window.setTimeout(resolve, 230));
+	assert.equal(requests.length, 1);
+	assert.equal(requests[0].isRead, true);
+	assert.deepEqual(requests[0].ids, ['1424']);
+	assert.equal(value.textContent, '3');
+});
+
 test('restores a cached weekly-hot fire before the eye with an accessible explanation', () => {
 	const { window } = boot({
 		markup: '<article id="post-22"></article>',
