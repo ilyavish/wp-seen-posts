@@ -4,7 +4,7 @@ Tags: seen posts, unread, popular posts, analytics, p2
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.3.5
+Stable tag: 1.3.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,7 +18,8 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Adapts the visibility measurement for posts taller than the viewport.
 * Keeps newly Seen posts visible for the rest of the current page session to prevent scroll-time layout shifts.
 * Shows one compact caught-up status only when no more archive pages remain.
-* Warms up to six fully Seen archive pages in one bounded parallel batch, while the companion infinite-scroll control still inserts them in order.
+* Uses a cached and validated public post-ID index to start the first possible Unseen home-feed page from the head bootstrap, without uploading personal Seen history.
+* Falls back to warming up to six fully Seen archive pages in one bounded parallel batch, while the companion infinite-scroll control still inserts them in order.
 * Resumes automatic unseen discovery when a temporarily disabled loader settles, without flashing Load More or intermediate status text between pages.
 * Keeps two recent Seen cards visible as a stable preview if a reload would otherwise look empty.
 * Shows “Finding unseen posts…” only when background loading behind that preview takes longer than 1,500 milliseconds.
@@ -65,6 +66,11 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.3.6 =
+* Replaces multi-batch searching on the standard posts home with a small cached public post-ID index embedded in the page and one target archive request started by the head bootstrap.
+* Handles 100+ Seen histories without downloading and inserting every intervening archive page; the current rendered page must match the index exactly before skipping is allowed.
+* Keeps personal Seen IDs entirely in the browser, corrects the companion loader's source-page metadata after a safe jump, and falls back through a fresh REST index or ordered warm-up on any mismatch, timeout, or endpoint failure.
 
 = 1.3.5 =
 * Restores one bounded six-page parallel warm-up so 30–60 previously Seen posts do not create multiple serial network waves.

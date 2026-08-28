@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks Seen posts, hides them on later feed visits, and provides anonymous public counters and Top Seen rankings.
- * Version:           1.3.5
+ * Version:           1.3.6
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,8 +18,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.3.5';
+const VERSION = '1.3.6';
 const OPTION  = 'wp_seen_posts_selectors';
+const HOME_INDEX_TRANSIENT = 'wp_seen_posts_home_index_v1';
 
 require_once __DIR__ . '/includes/class-settings.php';
 require_once __DIR__ . '/includes/class-public-counts.php';
@@ -254,6 +255,58 @@ function enqueue_gamification_assets(): void {
 }
 
 /**
+ * Return a short-lived public ID index for the standard posts home.
+ *
+ * The browser compares these public IDs with local Seen history; history is
+ * never sent back to WordPress. Client-side validation prevents this index
+ * from skipping pages if a theme or query filter produces a different order.
+ *
+ * @return array<int,int>
+ */
+function home_post_index( $query, int $max_pages ): array {
+	if ( ! is_home() || ! $query instanceof \WP_Query ) {
+		return array();
+	}
+
+	$cached = get_transient( HOME_INDEX_TRANSIENT );
+	if ( is_array( $cached ) ) {
+		return array_values( array_map( 'intval', $cached ) );
+	}
+
+	$page_size = max( 1, (int) $query->get( 'posts_per_page' ) );
+	$limit     = min( 500, max( $page_size, $page_size * max( 1, $max_pages ) ) );
+	$args      = $query->query_vars;
+	unset( $args['offset'] );
+	$args['fields']                 = 'ids';
+	$args['posts_per_page']         = $limit;
+	$args['paged']                  = 1;
+	$args['page']                   = 1;
+	$args['nopaging']               = false;
+	$args['no_found_rows']          = true;
+	$args['update_post_meta_cache'] = false;
+	$args['update_post_term_cache'] = false;
+
+	$index_query = new \WP_Query( $args );
+	$ids         = array();
+	foreach ( (array) $index_query->posts as $indexed_post ) {
+		$post_id = is_object( $indexed_post ) && isset( $indexed_post->ID ) ? (int) $indexed_post->ID : (int) $indexed_post;
+		if ( $post_id > 0 ) {
+			$ids[] = $post_id;
+		}
+	}
+	set_transient( HOME_INDEX_TRANSIENT, $ids, 5 * MINUTE_IN_SECONDS );
+	return $ids;
+}
+
+/** Invalidate the public home index when post membership or stickies change. */
+function clear_home_post_index(): void {
+	delete_transient( HOME_INDEX_TRANSIENT );
+}
+add_action( 'save_post_post', __NAMESPACE__ . '\\clear_home_post_index', 10, 0 );
+add_action( 'deleted_post', __NAMESPACE__ . '\\clear_home_post_index', 10, 0 );
+add_action( 'update_option_sticky_posts', __NAMESPACE__ . '\\clear_home_post_index', 10, 0 );
+
+/**
  * Enqueue the dependency-free feed enhancement.
  */
 function enqueue_assets(): void {
@@ -349,7 +402,20 @@ function enqueue_assets(): void {
 	}
 
 	$current_page   = max( 1, (int) get_query_var( 'paged' ) );
-	$has_more_pages = isset( $wp_query->max_num_pages ) && $current_page < (int) $wp_query->max_num_pages;
+	$max_pages      = isset( $wp_query->max_num_pages ) ? max( 1, (int) $wp_query->max_num_pages ) : 1;
+	$has_more_pages = $current_page < $max_pages;
+	$home_post_index = is_home() ? home_post_index( $wp_query, $max_pages ) : array();
+	$initial_post_ids = array_values(
+		array_filter(
+			array_map(
+				static function ( $post ): int {
+					return is_object( $post ) && isset( $post->ID ) ? (int) $post->ID : (int) $post;
+				},
+				(array) $wp_query->posts
+			)
+		)
+	);
+	$next_page_url = $has_more_pages ? get_next_posts_page_link( $max_pages ) : '';
 
 	wp_enqueue_script(
 		'wp-seen-posts-adapters',
@@ -377,6 +443,9 @@ function enqueue_assets(): void {
 		'previewLoadingDelay'         => 1500,
 		'unseenPrefetchPageLimit'     => 6,
 		'unseenPrefetchConcurrency'   => 6,
+		'restPostIndexUrl'            => is_home() ? rest_url( 'wp/v2/posts' ) : '',
+		'homePostIndex'               => $home_post_index,
+		'maxPages'                    => $max_pages,
 		'hasMorePages'                => $has_more_pages,
 		'maxEntries'                  => $limits['max_entries'],
 		'retentionDays'               => $limits['retention_days'],
@@ -418,6 +487,11 @@ function enqueue_assets(): void {
 					'previewSelector' => $preview_selector,
 					'maxEntries'      => $limits['max_entries'],
 					'retentionDays'   => $limits['retention_days'],
+					'initialPostIds'  => $initial_post_ids,
+					'homePostIndex'   => $home_post_index,
+					'currentPage'     => $current_page,
+					'maxPages'        => $max_pages,
+					'nextPageUrl'     => $next_page_url,
 				)
 			) . ';' . "\n" . $early_script
 		);

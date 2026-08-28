@@ -13,7 +13,9 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - A tiny head bootstrap validates retention and size limits before pre-hiding stored Seen cards during parsing, preventing both a full-feed flash and transient hiding from expired history.
 - On an all-Seen P2 or Query Loop page, that same bootstrap keeps the two-card preview visible before footer scripts run.
 - A compact caught-up status appears only after pagination is genuinely exhausted; the toolbar remains the single reveal control.
-- If a loaded page contains only previously Seen posts, up to six same-origin archive pages are warmed in one bounded parallel batch; the companion loader still parses and inserts them in exact order until unseen content or the true end is reached.
+- On the standard posts home, a small cached public post-ID index is embedded with the page and locates the first archive page that can contain an Unseen post. The head bootstrap starts that exact page request immediately, then the full engine reuses its response. The index must exactly match the currently rendered page before any page is skipped; WordPress REST refreshes it only as a safe fallback.
+- Seen history stays in the browser: the index contains only public post IDs, and no personal Seen IDs or history are sent to WordPress.
+- On other archives or whenever index validation fails, up to six same-origin archive pages are warmed in one bounded parallel batch; the companion loader still parses and inserts them in exact order until unseen content or the true end is reached.
 - Failed or unsupported warm-up requests fall back to the companion loader's normal fetch, and no warm-up runs while an Unseen card is already available.
 - Automatic unseen discovery observes temporarily disabled infinite-scroll controls and resumes as soon as the loader settles, rather than stopping between pages.
 - During automatic discovery, one fixed “Finding unseen posts…” status replaces the companion loader's flashing Load More and intermediate status text; a prominent loader failure still restores its manual Continue fallback.

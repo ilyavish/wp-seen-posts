@@ -33,7 +33,7 @@ function badges() {
 async function boot(history = {}, options = {}) {
 	const postCount = options.postCount ?? 2;
 	const postMarkup = Array.from({ length: postCount }, (_, index) => {
-		const id = index + 1;
+		const id = (options.postStartId ?? 1) + index;
 		const like = options.includeWpULike ? `<div class="wpulike"><button class="wp_ulike_btn">Like ${id}</button></div>` : '';
 		const publicCounter = options.includePublicCounts !== false
 			? `<div class="postcontent">Post ${id}${like}<div class="wp-seen-posts-public-count-wrap"><span class="wp-seen-posts-public-count" data-seen-post-id="${id}" data-seen-count="9"><span class="wp-seen-posts-public-value">9</span></span></div></div>`
@@ -88,6 +88,9 @@ async function boot(history = {}, options = {}) {
 		previewLoadingDelay: options.previewLoadingDelay ?? 1500,
 		unseenPrefetchPageLimit: options.unseenPrefetchPageLimit ?? 0,
 		unseenPrefetchConcurrency: options.unseenPrefetchConcurrency ?? 6,
+		restPostIndexUrl: options.restPostIndexUrl || '',
+		homePostIndex: options.homePostIndex || [],
+		maxPages: options.maxPages ?? 1,
 		maxEntries: 3000, retentionDays: 365, badges: badges(), i18n: strings()
 	};
 	window.confirm = () => true;
@@ -130,6 +133,39 @@ test('pre-hides stored cards before the engine takes ownership on reload', async
 	assert.equal(historyWrites, 0);
 	assert.equal(window.WPSeenPostsEarlyHide.history, null);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-prebadge').length, 0);
+});
+
+test('starts the exact 100-post home-feed warm-up from the head bootstrap', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [String(index + 1), now]));
+	const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://example.com/', runScripts: 'outside-only' });
+	const { window } = dom;
+	window.localStorage.setItem('wp_seen_posts_v1', JSON.stringify(history));
+	const requests = [];
+	function responseFor(url) {
+		return { ok: true, clone: () => responseFor(url), text: () => Promise.resolve(url) };
+	}
+	window.fetch = (input) => {
+		const url = String(input);
+		requests.push(url);
+		return Promise.resolve(responseFor(url));
+	};
+	window.wpSeenPostsEarlyConfig = {
+		storageKey: 'wp_seen_posts_v1',
+		maxEntries: 3000,
+		retentionDays: 365,
+		initialPostIds: Array.from({ length: 10 }, (_, index) => index + 1),
+		homePostIndex: Array.from({ length: 160 }, (_, index) => index + 1),
+		currentPage: 1,
+		maxPages: 16,
+		nextPageUrl: 'https://example.com/page/2/'
+	};
+	window.eval(earlyHide);
+	await new Promise((resolve) => window.setTimeout(resolve, 0));
+	assert.deepEqual(requests, ['https://example.com/page/11/']);
+	assert.equal(window.WPSeenPostsEarlyHide.targetWarm.requestedUrl, 'https://example.com/page/2/');
+	assert.equal(window.WPSeenPostsEarlyHide.targetWarm.targetUrl, 'https://example.com/page/11/');
+	assert.equal(await (await window.WPSeenPostsEarlyHide.targetWarm.promise).text(), 'https://example.com/page/11/');
 });
 
 test('asks the public counter layer to restore markup stripped by Read More', async () => {
@@ -623,6 +659,192 @@ test('warms consecutive Seen archive pages in one bounded parallel batch', async
 	resolvers.get('https://example.com/page/6/')(responseFor('https://example.com/page/6/'));
 	resolvers.get('https://example.com/page/7/')(responseFor('https://example.com/page/7/'));
 	assert.equal(requests.length, 6);
+});
+
+test('uses the embedded validated home index to warm only the target page for 100 Seen posts', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [String(index + 1), now]));
+	const requests = [];
+	function responseFor(url) {
+		return { ok: true, clone: () => responseFor(url), text: () => Promise.resolve(url) };
+	}
+	const { window } = await boot(history, {
+		postCount: 10,
+		hasMorePages: true,
+		unseenPrefetchPageLimit: 6,
+		homePostIndex: Array.from({ length: 160 }, (_, index) => index + 1),
+		maxPages: 16,
+		beforeEval(currentWindow) {
+			currentWindow.fetch = (input) => {
+				const url = String(input);
+				requests.push(url);
+				return Promise.resolve(responseFor(url));
+			};
+		}
+	});
+
+	assert.deepEqual(requests, ['https://example.com/page/11/']);
+	const response = await window.fetch('https://example.com/page/2/', { method: 'GET' });
+	assert.equal(await response.text(), 'https://example.com/page/11/');
+	assert.deepEqual(requests, ['https://example.com/page/11/']);
+});
+
+test('reuses the target response already started by the head bootstrap', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [String(index + 1), now]));
+	function responseFor(url) {
+		return { ok: true, clone: () => responseFor(url), text: () => Promise.resolve(url) };
+	}
+	const { window } = await boot(history, {
+		postCount: 10,
+		hasMorePages: true,
+		unseenPrefetchPageLimit: 6,
+		homePostIndex: Array.from({ length: 160 }, (_, index) => index + 1),
+		maxPages: 16,
+		beforeEval(currentWindow) {
+			currentWindow.WPSeenPostsEarlyHide = {
+				history,
+				targetWarm: {
+					requestedUrl: 'https://example.com/page/2/',
+					targetUrl: 'https://example.com/page/11/',
+					promise: Promise.resolve(responseFor('https://example.com/page/11/'))
+				},
+				stop() {},
+				release() {}
+			};
+			currentWindow.fetch = () => {
+				throw new Error('The footer engine should reuse the early response.');
+			};
+		}
+	});
+
+	const response = await window.fetch('https://example.com/page/2/', { method: 'GET' });
+	assert.equal(await response.text(), 'https://example.com/page/11/');
+});
+
+test('uses a validated public post index to jump directly past 100 Seen home-feed posts', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [String(index + 1), now]));
+	const requests = [];
+	function archiveResponse(url) {
+		return {
+			ok: true,
+			clone: () => archiveResponse(url),
+			text: () => Promise.resolve(`<html data-source="${url}"></html>`)
+		};
+	}
+	function indexResponse(page) {
+		const first = (page - 1) * 100 + 1;
+		const last = page === 1 ? 100 : 160;
+		return {
+			ok: true,
+			json: () => Promise.resolve(Array.from({ length: last - first + 1 }, (_, index) => ({ id: first + index })))
+		};
+	}
+	const { window } = await boot(history, {
+		postCount: 10,
+		hasMorePages: true,
+		unseenPrefetchPageLimit: 6,
+		homePostIndex: Array.from({ length: 160 }, (_, index) => 500 + index),
+		restPostIndexUrl: 'https://example.com/wp-json/wp/v2/posts',
+		maxPages: 16,
+		beforeEval(currentWindow) {
+			currentWindow.fetch = (input) => {
+				const url = String(input);
+				requests.push(url);
+				if (url.includes('/wp-json/wp/v2/posts')) return Promise.resolve(indexResponse(Number(new URL(url).searchParams.get('page'))));
+				return Promise.resolve(archiveResponse(url));
+			};
+		}
+	});
+
+	const response = await window.fetch('https://example.com/page/2/', { method: 'GET' });
+	assert.equal(await response.text(), '<html data-source="https://example.com/page/11/"></html>');
+	assert.equal(requests.filter((url) => url === 'https://example.com/page/2/').length, 1);
+	assert.equal(requests.filter((url) => url === 'https://example.com/page/11/').length, 1);
+	const indexRequests = requests.filter((url) => url.includes('/wp-json/wp/v2/posts'));
+	assert.equal(indexRequests.length, 2);
+	assert.equal(indexRequests.every((url) => !url.includes('seen') && !url.includes('history')), true);
+
+	const feed = window.document.querySelector('#postlist');
+	const boundary = window.document.createElement('li');
+	boundary.className = 'wp-pfis-page-boundary';
+	boundary.dataset.sourcePage = '2';
+	boundary.dataset.sourceUrl = 'https://example.com/page/2/';
+	feed.appendChild(boundary);
+	const unseen = window.document.createElement('li');
+	unseen.id = 'prologue-101';
+	unseen.className = 'post post-101';
+	unseen.dataset.sourcePage = '2';
+	unseen.dataset.sourceUrl = 'https://example.com/page/2/';
+	feed.appendChild(unseen);
+	const detail = { container: feed, posts: [unseen], sourceUrl: 'https://example.com/page/2/' };
+	window.document.dispatchEvent(new window.CustomEvent('wpFeedPostsAdded', { detail }));
+	assert.equal(detail.sourceUrl, 'https://example.com/page/11/');
+	assert.equal(unseen.dataset.sourceUrl, 'https://example.com/page/11/');
+	assert.equal(unseen.dataset.sourcePage, '11');
+	assert.equal(boundary.dataset.sourceUrl, 'https://example.com/page/11/');
+});
+
+test('keeps the indexed jump accurate after reloading a paged home-feed URL', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [String(index + 1), now]));
+	function archiveResponse(url) {
+		return { ok: true, clone: () => archiveResponse(url), text: () => Promise.resolve(url) };
+	}
+	const { window } = await boot(history, {
+		postCount: 10,
+		postStartId: 21,
+		nextPageUrl: 'https://example.com/page/4/',
+		hasMorePages: true,
+		unseenPrefetchPageLimit: 6,
+		restPostIndexUrl: 'https://example.com/wp-json/wp/v2/posts',
+		maxPages: 16,
+		beforeEval(currentWindow) {
+			currentWindow.fetch = (input) => {
+				const url = String(input);
+				if (!url.includes('/wp-json/wp/v2/posts')) return Promise.resolve(archiveResponse(url));
+				const page = Number(new URL(url).searchParams.get('page'));
+				const first = (page - 1) * 100 + 1;
+				const last = page === 1 ? 100 : 160;
+				return Promise.resolve({
+					ok: true,
+					json: () => Promise.resolve(Array.from({ length: last - first + 1 }, (_, index) => ({ id: first + index })))
+				});
+			};
+		}
+	});
+
+	const response = await window.fetch('https://example.com/page/4/', { method: 'GET' });
+	assert.equal(await response.text(), 'https://example.com/page/11/');
+});
+
+test('never skips an archive page when the public post index does not match the rendered feed', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [String(index + 1), now]));
+	function archiveResponse(url) {
+		return { ok: true, clone: () => archiveResponse(url), text: () => Promise.resolve(url) };
+	}
+	const { window } = await boot(history, {
+		postCount: 10,
+		hasMorePages: true,
+		unseenPrefetchPageLimit: 6,
+		homePostIndex: Array.from({ length: 160 }, (_, index) => 500 + index),
+		restPostIndexUrl: 'https://example.com/wp-json/wp/v2/posts',
+		maxPages: 16,
+		beforeEval(currentWindow) {
+			currentWindow.fetch = (input) => {
+				const url = String(input);
+				if (url.includes('/wp-json/wp/v2/posts')) {
+					return Promise.resolve({ ok: true, json: () => Promise.resolve(Array.from({ length: 100 }, (_, index) => ({ id: 500 + index }))) });
+				}
+				return Promise.resolve(archiveResponse(url));
+			};
+		}
+	});
+
+	const response = await window.fetch('https://example.com/page/2/', { method: 'GET' });
+	assert.equal(await response.text(), 'https://example.com/page/2/');
 });
 
 test('falls back to the normal archive request when a warmed response fails', async () => {

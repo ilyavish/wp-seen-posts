@@ -28,6 +28,82 @@
 	}
 	var seenIds = new Set(validEntries.map(function (entry) { return entry[0]; }));
 	if (!seenIds.size) return;
+	var targetWarm = null;
+
+	function normalizedUrl(value) {
+		if (typeof value !== 'string' || !value) return '';
+		try {
+			var url = new URL(value, window.location.href);
+			url.hash = '';
+			return url.origin === window.location.origin && /^https?:$/.test(url.protocol) ? url.href : '';
+		} catch (error) { return ''; }
+	}
+
+	function pageNumber(value) {
+		var normalized = normalizedUrl(value);
+		if (!normalized) return 0;
+		var url = new URL(normalized);
+		var pathMatch = url.pathname.match(/\/page\/(\d+)\/?$/);
+		var number = pathMatch ? Number(pathMatch[1]) : Number(url.searchParams.get('paged'));
+		return Number.isSafeInteger(number) && number > 0 ? number : 0;
+	}
+
+	function archivePageUrl(startUrl, targetPage) {
+		var normalized = normalizedUrl(startUrl);
+		var firstPage = pageNumber(normalized);
+		if (!normalized || !firstPage || targetPage < firstPage) return '';
+		var url = new URL(normalized);
+		var pathMatch = url.pathname.match(/\/page\/(\d+)\/?$/);
+		if (pathMatch) {
+			var trailingSlash = /\/$/.test(url.pathname);
+			url.pathname = url.pathname.replace(/\/page\/\d+\/?$/, '/page/' + targetPage + (trailingSlash ? '/' : ''));
+		} else url.searchParams.set('paged', String(targetPage));
+		return url.href;
+	}
+
+	function startTargetWarm() {
+		if (typeof window.fetch !== 'function') return;
+		var initialIds = Array.isArray(config.initialPostIds) ? config.initialPostIds.map(function (id) {
+			return Number(id) > 0 ? String(Number(id)) : '';
+		}).filter(Boolean) : [];
+		var indexedIds = Array.isArray(config.homePostIndex) ? config.homePostIndex.map(function (id) {
+			return Number(id) > 0 ? String(Number(id)) : '';
+		}).filter(Boolean) : [];
+		var currentPage = Math.max(1, Math.floor(Number(config.currentPage) || 1));
+		var maxPages = Math.max(1, Math.floor(Number(config.maxPages) || 1));
+		var nextUrl = normalizedUrl(config.nextPageUrl || '');
+		var pageSize = initialIds.length;
+		if (!pageSize || !indexedIds.length || !nextUrl || currentPage >= maxPages) return;
+		if (!initialIds.every(function (id) { return seenIds.has(id); })) return;
+		var validationOffset = (currentPage - 1) * pageSize;
+		var renderedIds = indexedIds.slice(validationOffset, validationOffset + pageSize);
+		if (renderedIds.length !== pageSize || renderedIds.some(function (id, index) { return id !== initialIds[index]; })) return;
+
+		var targetPage = 0;
+		for (var page = currentPage + 1; page <= maxPages; page += 1) {
+			var pageIds = indexedIds.slice((page - 1) * pageSize, page * pageSize);
+			if (!pageIds.length) break;
+			if (pageIds.some(function (id) { return !seenIds.has(id); })) {
+				targetPage = page;
+				break;
+			}
+		}
+		if (!targetPage) targetPage = indexedIds.length >= maxPages * pageSize
+			? maxPages
+			: Math.min(maxPages, Math.floor(indexedIds.length / pageSize) + 1);
+		var targetUrl = archivePageUrl(nextUrl, Math.max(currentPage + 1, targetPage));
+		if (!targetUrl) return;
+		var request = window.fetch(targetUrl, {
+			credentials: 'same-origin',
+			headers: { Accept: 'text/html' }
+		}).then(function (response) {
+			if (!response || !response.ok || typeof response.clone !== 'function') throw new Error('Early unseen-page warm-up failed.');
+			return response;
+		});
+		request.catch(function () {});
+		targetWarm = { requestedUrl: nextUrl, targetUrl: targetUrl, promise: request };
+	}
+	startTargetWarm();
 	var previewCount = Math.max(0, Math.floor(Number(config.previewCount) || 0));
 	var previewSelector = typeof config.previewSelector === 'string' ? config.previewSelector : '';
 	var previewCards = [];
@@ -94,6 +170,7 @@
 
 	window.WPSeenPostsEarlyHide = {
 		history: history,
+		targetWarm: targetWarm,
 		stop: function () { observer.disconnect(); },
 		release: function () {
 			observer.disconnect();

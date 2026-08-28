@@ -146,6 +146,13 @@
 		var observedInfiniteControls = null;
 		var nativeFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
 		var warmedPageResponses = new Map();
+		var warmedPageAliases = new Map();
+		var restPostIndexUrl = normalizedPageUrl(config.restPostIndexUrl || '');
+		var homePostIndex = Array.isArray(config.homePostIndex) ? config.homePostIndex.map(function (id) {
+			return Number(id) > 0 ? String(Number(id)) : '';
+		}).filter(Boolean) : [];
+		var archiveMaxPages = Math.max(1, Math.floor(Number(config.maxPages) || 1));
+		var homeIndexWarmupStarted = false;
 
 		function normalizedPageUrl(value) {
 			if (typeof value !== 'string' || !value) return '';
@@ -175,6 +182,22 @@
 				urls.push(candidate.href);
 			}
 			return urls;
+		}
+
+		function pageNumberFromUrl(value) {
+			var normalized = normalizedPageUrl(value);
+			if (!normalized) return 0;
+			var url = new URL(normalized);
+			var pathMatch = url.pathname.match(/\/page\/(\d+)\/?$/);
+			var page = pathMatch ? Number(pathMatch[1]) : Number(url.searchParams.get('paged'));
+			return Number.isSafeInteger(page) && page > 0 ? page : 0;
+		}
+
+		function archivePageUrl(startUrl, targetPage) {
+			var firstPage = pageNumberFromUrl(startUrl);
+			if (!firstPage || targetPage < firstPage) return '';
+			var urls = upcomingPageUrls(startUrl, targetPage - firstPage + 1);
+			return urls[targetPage - firstPage] || '';
 		}
 
 		function requestUrl(input) {
@@ -231,8 +254,150 @@
 			return window.fetch === bridgedFetch;
 		}
 
+		function validatedArchiveResponse(response) {
+			if (!response || !response.ok || typeof response.clone !== 'function') throw new Error('Unseen-page prefetch failed.');
+			return response;
+		}
+
+		function archiveRequest(url) {
+			return nativeFetch(url, {
+				credentials: 'same-origin',
+				headers: { Accept: 'text/html' }
+			}).then(validatedArchiveResponse);
+		}
+
+		function withTimeout(promise, milliseconds) {
+			return new Promise(function (resolve, reject) {
+				var timer = window.setTimeout(function () { reject(new Error('Post index timed out.')); }, milliseconds);
+				promise.then(function (value) {
+					window.clearTimeout(timer);
+					resolve(value);
+				}, function (error) {
+					window.clearTimeout(timer);
+					reject(error);
+				});
+			});
+		}
+
+		function targetPageFromIndex(indexedIds, baseRecordOffset, currentRecordOffset, firstNextPage, pageSize) {
+			var validationOffset = currentRecordOffset - baseRecordOffset;
+			var renderedIds = indexedIds.slice(validationOffset, validationOffset + initialPostIds.length);
+			if (validationOffset < 0 || renderedIds.length !== initialPostIds.length || renderedIds.some(function (id, index) {
+				return id !== initialPostIds[index];
+			})) throw new Error('Post index did not match the rendered feed.');
+
+			var lastIndexedRecord = baseRecordOffset + indexedIds.length;
+			for (var page = firstNextPage; page <= archiveMaxPages; page += 1) {
+				var pageOffset = (page - 1) * pageSize;
+				if (pageOffset < baseRecordOffset || pageOffset >= lastIndexedRecord) break;
+				var localOffset = pageOffset - baseRecordOffset;
+				var pageIds = indexedIds.slice(localOffset, localOffset + pageSize);
+				if (pageIds.some(function (id) { return !historyAtLoad.has(id); })) return page;
+			}
+
+			var firstUnindexedPage = Math.floor(lastIndexedRecord / pageSize) + 1;
+			return lastIndexedRecord >= archiveMaxPages * pageSize
+				? archiveMaxPages
+				: Math.min(archiveMaxPages, Math.max(firstNextPage, firstUnindexedPage));
+		}
+
+		function warmIndexedHomePage(startUrl) {
+			if (homeIndexWarmupStarted || archiveMaxPages < 2) return false;
+			var firstNextPage = pageNumberFromUrl(startUrl);
+			var pageSize = Math.max(1, initialPostIds.length);
+			if (!firstNextPage || !pageSize) return false;
+
+			var currentPage = firstNextPage - 1;
+			var currentRecordOffset = Math.max(0, (currentPage - 1) * pageSize);
+			if (homePostIndex.length) {
+				try {
+					var embeddedTargetPage = targetPageFromIndex(homePostIndex, 0, currentRecordOffset, firstNextPage, pageSize);
+					var embeddedTargetUrl = archivePageUrl(startUrl, embeddedTargetPage);
+					if (!embeddedTargetUrl || !installWarmedFetchBridge()) return false;
+					homeIndexWarmupStarted = true;
+					var earlyTargetWarm = earlyHide && earlyHide.targetWarm;
+					var canReuseEarlyWarm = earlyTargetWarm
+						&& normalizedPageUrl(earlyTargetWarm.requestedUrl || '') === startUrl
+						&& normalizedPageUrl(earlyTargetWarm.targetUrl || '') === embeddedTargetUrl
+						&& earlyTargetWarm.promise && typeof earlyTargetWarm.promise.then === 'function';
+					var embeddedSelection = canReuseEarlyWarm
+						? Promise.resolve(earlyTargetWarm.promise).then(validatedArchiveResponse).catch(function () { return archiveRequest(embeddedTargetUrl); })
+						: archiveRequest(embeddedTargetUrl);
+					if (earlyHide) earlyHide.targetWarm = null;
+					embeddedSelection = embeddedSelection.then(function (response) {
+						if (embeddedTargetUrl !== startUrl) warmedPageAliases.set(startUrl, embeddedTargetUrl);
+						return response;
+					});
+					warmedPageResponses.set(startUrl, embeddedSelection);
+					embeddedSelection.catch(function () {});
+					return true;
+				} catch (error) {}
+			}
+
+			if (!restPostIndexUrl || !installWarmedFetchBridge()) return false;
+			homeIndexWarmupStarted = true;
+			var firstIndexPage = Math.floor(currentRecordOffset / 100) + 1;
+			var remainingRecords = Math.max(pageSize, archiveMaxPages * pageSize - ((firstIndexPage - 1) * 100));
+			var indexPageCount = Math.max(1, Math.min(3, Math.ceil(remainingRecords / 100)));
+			var pageRequests = new Map();
+
+			function requestArchive(url) {
+				if (!pageRequests.has(url)) pageRequests.set(url, archiveRequest(url));
+				return pageRequests.get(url);
+			}
+
+			var fallbackRequest = requestArchive(startUrl);
+			fallbackRequest.catch(function () {});
+			var predictedPage = Math.max(firstNextPage, Math.floor(historyAtLoad.size / pageSize) + 1);
+			predictedPage = Math.min(archiveMaxPages, predictedPage);
+			var predictedUrl = archivePageUrl(startUrl, predictedPage) || startUrl;
+			requestArchive(predictedUrl).catch(function () {});
+
+			var indexRequests = [];
+			for (var offset = 0; offset < indexPageCount; offset += 1) {
+				var indexUrl = new URL(restPostIndexUrl);
+				indexUrl.searchParams.set('per_page', '100');
+				indexUrl.searchParams.set('page', String(firstIndexPage + offset));
+				indexUrl.searchParams.set('_fields', 'id');
+				indexRequests.push(nativeFetch(indexUrl.href, {
+					credentials: 'same-origin',
+					headers: { Accept: 'application/json' }
+				}).then(function (response) {
+					if (!response || !response.ok || typeof response.json !== 'function') throw new Error('Post index failed.');
+					return response.json();
+				}));
+			}
+
+			var selection = withTimeout(Promise.all(indexRequests), 3500).then(function (chunks) {
+				var indexedIds = [];
+				chunks.forEach(function (rows) {
+					if (!Array.isArray(rows)) throw new Error('Post index was invalid.');
+					rows.forEach(function (row) {
+						if (row && Number(row.id) > 0) indexedIds.push(String(Number(row.id)));
+					});
+				});
+				var baseRecordOffset = (firstIndexPage - 1) * 100;
+				var targetPage = targetPageFromIndex(indexedIds, baseRecordOffset, currentRecordOffset, firstNextPage, pageSize);
+				var targetUrl = archivePageUrl(startUrl, targetPage);
+				if (!targetUrl) throw new Error('The unseen archive page was invalid.');
+				return requestArchive(targetUrl).then(function (response) {
+					if (targetUrl !== startUrl) warmedPageAliases.set(startUrl, targetUrl);
+					return response;
+				});
+			}).catch(function () {
+				return fallbackRequest;
+			});
+
+			warmedPageResponses.set(startUrl, selection);
+			selection.catch(function () {});
+			return true;
+		}
+
 		function warmUpcomingPages(startUrl) {
 			if (!nativeFetch || unseenPrefetchPageLimit < 1 || warmedPageResponses.size) return;
+			startUrl = normalizedPageUrl(startUrl);
+			if (!startUrl) return;
+			if (warmIndexedHomePage(startUrl)) return;
 			var pageSize = Math.max(1, initialPostIds.length);
 			var estimatedPages = Math.max(1, Math.ceil(historyAtLoad.size / pageSize));
 			var urls = upcomingPageUrls(startUrl, Math.min(unseenPrefetchPageLimit, estimatedPages));
@@ -252,11 +417,7 @@
 			function runNextWarmTask() {
 				var task = tasks.shift();
 				if (!task) return;
-				nativeFetch(task.url, {
-					credentials: 'same-origin',
-					headers: { Accept: 'text/html' }
-				}).then(function (response) {
-					if (!response || !response.ok || typeof response.clone !== 'function') throw new Error('Unseen-page prefetch failed.');
+				archiveRequest(task.url).then(function (response) {
 					task.resolve(response);
 				}).catch(function (error) {
 					warmedPageResponses.delete(task.url);
@@ -630,6 +791,26 @@
 			requestMoreIfAllHidden();
 		}
 
+		function applyWarmedPageAlias(detail) {
+			var requestedUrl = detail ? normalizedPageUrl(detail.sourceUrl || '') : '';
+			var actualUrl = requestedUrl ? warmedPageAliases.get(requestedUrl) : '';
+			if (!actualUrl) return;
+			warmedPageAliases.delete(requestedUrl);
+			var sourcePage = String(pageNumberFromUrl(actualUrl) || '');
+			Array.prototype.forEach.call(detail.posts || [], function (post) {
+				post.dataset.sourceUrl = actualUrl;
+				if (sourcePage) post.dataset.sourcePage = sourcePage;
+			});
+			var boundaries = feed.querySelectorAll('.wp-pfis-page-boundary');
+			for (var index = boundaries.length - 1; index >= 0; index -= 1) {
+				if (normalizedPageUrl(boundaries[index].dataset.sourceUrl || '') !== requestedUrl) continue;
+				boundaries[index].dataset.sourceUrl = actualUrl;
+				if (sourcePage) boundaries[index].dataset.sourcePage = sourcePage;
+				break;
+			}
+			detail.sourceUrl = actualUrl;
+		}
+
 		function ensureCardStatus(card) {
 			var statusGroup = card.querySelector(':scope > .wp-seen-posts-card-status');
 			if (!statusGroup) {
@@ -799,6 +980,7 @@
 		document.addEventListener('wpFeedPostsAdded', function (event) {
 			if (!event.detail || event.detail.container !== feed || !event.detail.posts) return;
 			unseenAdvancePending = false;
+			applyWarmedPageAlias(event.detail);
 			initializePosts(event.detail.posts);
 			/* Wait until the companion loader finishes updating its controls, then skip an all-Seen page. */
 			window.setTimeout(continueFeedIfNeeded, 0);
