@@ -13,12 +13,12 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - A tiny head bootstrap validates retention and size limits before pre-hiding stored Seen cards during parsing, preventing both a full-feed flash and transient hiding from expired history.
 - On an all-Seen P2 or Query Loop page, that same bootstrap keeps the two-card preview visible before footer scripts run.
 - A compact caught-up status appears only after pagination is genuinely exhausted; the toolbar remains the single reveal control.
-- If a loaded page contains only previously Seen posts, up to six same-origin archive pages are queued through a two-request warm-up pipeline; the companion loader still parses and inserts them in exact order until unseen content or the true end is reached.
+- If a loaded page contains only previously Seen posts, up to six same-origin archive pages are warmed in one bounded parallel batch; the companion loader still parses and inserts them in exact order until unseen content or the true end is reached.
 - Failed or unsupported warm-up requests fall back to the companion loader's normal fetch, and no warm-up runs while an Unseen card is already available.
 - Automatic unseen discovery observes temporarily disabled infinite-scroll controls and resumes as soon as the loader settles, rather than stopping between pages.
 - During automatic discovery, one fixed “Finding unseen posts…” status replaces the companion loader's flashing Load More and intermediate status text; a prominent loader failure still restores its manual Continue fallback.
 - If a reload would otherwise contain no visible cards, two recent Seen cards remain as a stable preview while unseen pages load, avoiding both blank waits and live removal.
-- If background search behind the stable preview takes longer than 500 ms, the same compact fixed status appears without changing the feed height; fast loads never flash it.
+- If background search behind the stable preview takes longer than 1,500 ms, the same compact fixed status appears without changing the feed height; normal warm loads never flash it.
 - Each card uses only one bottom-right eye/count: a quiet gray eye means personally Unseen, and the same eye becomes fully opaque when Seen. No duplicate Seen word or post-level badge artwork is rendered.
 - The top badge shelf shows five achievements: the 5, 10, 50, and 100-post Beer, Vodka, Gopnik, and Black BMW roadmap plus the optional 4-Day Zapoi streak badge; locked badges are muted in grayscale and earned badges switch to full color.
 - Three genuinely new lifetime Seen posts complete one calendar day by default. Consecutive completed site-timezone dates grow a vodka streak, a missed date resets only the current streak, and the longest streak remains local.

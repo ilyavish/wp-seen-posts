@@ -139,7 +139,7 @@
 		var previewLoadingTimer = null;
 		var previewLoadingVisible = false;
 		var unseenPrefetchPageLimit = Math.max(0, Math.min(8, Math.floor(Number(config.unseenPrefetchPageLimit) || 0)));
-		var unseenPrefetchConcurrency = Math.max(1, Math.min(3, Math.floor(Number(config.unseenPrefetchConcurrency) || 2)));
+		var unseenPrefetchConcurrency = Math.max(1, Math.min(6, Math.floor(Number(config.unseenPrefetchConcurrency) || 6)));
 		var unseenSearchActive = false;
 		var unseenAdvancePending = false;
 		var infiniteControlsObserver = null;

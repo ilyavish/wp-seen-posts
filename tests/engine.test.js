@@ -85,9 +85,9 @@ async function boot(history = {}, options = {}) {
 		theme: 'p2', selectors: {}, storageKey: 'wp_seen_posts_v1', threshold: 0.5,
 		dwellTime: 5, hasMorePages: options.hasMorePages ?? false,
 		reloadPreviewCount: options.reloadPreviewCount ?? 2,
-		previewLoadingDelay: options.previewLoadingDelay ?? 500,
+		previewLoadingDelay: options.previewLoadingDelay ?? 1500,
 		unseenPrefetchPageLimit: options.unseenPrefetchPageLimit ?? 0,
-		unseenPrefetchConcurrency: options.unseenPrefetchConcurrency ?? 2,
+		unseenPrefetchConcurrency: options.unseenPrefetchConcurrency ?? 6,
 		maxEntries: 3000, retentionDays: 365, badges: badges(), i18n: strings()
 	};
 	window.confirm = () => true;
@@ -578,9 +578,9 @@ test('allows half a viewport to qualify an exceptionally tall post', async () =>
 	assert.equal(tallCard.dataset.seenPostState, 'seen');
 });
 
-test('warms consecutive Seen archive pages through a two-request pipeline', async () => {
+test('warms consecutive Seen archive pages in one bounded parallel batch', async () => {
 	const now = Math.floor(Date.now() / 1000);
-	const history = Object.fromEntries(Array.from({ length: 50 }, (_, index) => [String(index + 1), now]));
+	const history = Object.fromEntries(Array.from({ length: 60 }, (_, index) => [String(index + 1), now]));
 	const requests = [];
 	const resolvers = new Map();
 	function responseFor(url) {
@@ -594,7 +594,7 @@ test('warms consecutive Seen archive pages through a two-request pipeline', asyn
 		postCount: 10,
 		hasMorePages: true,
 		unseenPrefetchPageLimit: 6,
-		unseenPrefetchConcurrency: 2,
+		unseenPrefetchConcurrency: 6,
 		beforeEval(currentWindow) {
 			currentWindow.fetch = (input) => {
 				const url = String(input);
@@ -606,27 +606,23 @@ test('warms consecutive Seen archive pages through a two-request pipeline', asyn
 
 	assert.deepEqual(requests, [
 		'https://example.com/page/2/',
-		'https://example.com/page/3/'
+		'https://example.com/page/3/',
+		'https://example.com/page/4/',
+		'https://example.com/page/5/',
+		'https://example.com/page/6/',
+		'https://example.com/page/7/'
 	]);
 	const warmed = window.fetch('https://example.com/page/2/', { method: 'GET' });
-	assert.equal(requests.length, 2);
+	assert.equal(requests.length, 6);
 	resolvers.get('https://example.com/page/2/')(responseFor('https://example.com/page/2/'));
 	const response = await warmed;
 	assert.equal(await response.text(), '<html data-source="https://example.com/page/2/"></html>');
-	await new Promise((resolve) => window.setTimeout(resolve, 0));
-	assert.deepEqual(requests, [
-		'https://example.com/page/2/',
-		'https://example.com/page/3/',
-		'https://example.com/page/4/'
-	]);
 	resolvers.get('https://example.com/page/3/')(responseFor('https://example.com/page/3/'));
-	await new Promise((resolve) => window.setTimeout(resolve, 0));
-	assert.equal(requests.at(-1), 'https://example.com/page/5/');
 	resolvers.get('https://example.com/page/4/')(responseFor('https://example.com/page/4/'));
-	await new Promise((resolve) => window.setTimeout(resolve, 0));
-	assert.equal(requests.at(-1), 'https://example.com/page/6/');
 	resolvers.get('https://example.com/page/5/')(responseFor('https://example.com/page/5/'));
 	resolvers.get('https://example.com/page/6/')(responseFor('https://example.com/page/6/'));
+	resolvers.get('https://example.com/page/7/')(responseFor('https://example.com/page/7/'));
+	assert.equal(requests.length, 6);
 });
 
 test('falls back to the normal archive request when a warmed response fails', async () => {
