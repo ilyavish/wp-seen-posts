@@ -61,6 +61,7 @@ final class Top_Seen_Widget extends \WP_Widget {
 		if ( ! $posts ) {
 			return;
 		}
+		$lifetime_counts = Public_Counts::counts_for_posts( $posts );
 
 		$scores = array();
 		foreach ( $rows as $row ) {
@@ -72,6 +73,11 @@ final class Top_Seen_Widget extends \WP_Widget {
 		if ( '' !== $title ) {
 			echo $args['before_title'] . esc_html( $title ) . $args['after_title']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		}
+		$periods = self::period_options();
+		printf(
+			'<p class="wp-seen-posts-top-period">%s</p>',
+			esc_html( $periods[ $settings['period'] ] )
+		);
 		printf(
 			'<ul class="wp-seen-posts-top-list wp-seen-posts-top-list-%s">',
 			esc_attr( $settings['display'] )
@@ -82,7 +88,10 @@ final class Top_Seen_Widget extends \WP_Widget {
 			if ( ! isset( $scores[ $post_id ] ) ) {
 				continue;
 			}
-			$this->render_item( $post, $scores[ $post_id ], $settings );
+			/* The period total determines rank. The visible eye uses the same
+			 * lifetime total as the destination article, avoiding a false mismatch. */
+			$lifetime_count = isset( $lifetime_counts[ $post_id ] ) ? (int) $lifetime_counts[ $post_id ] : 0;
+			$this->render_item( $post, $lifetime_count, $settings );
 		}
 
 		echo '</ul>';
@@ -173,7 +182,7 @@ final class Top_Seen_Widget extends \WP_Widget {
 		$title       = get_the_title( $post );
 		$url         = get_permalink( $post );
 		$show_image  = 'text' !== $settings['display'];
-		$count_label = self::count_label( $settings['period'], $seen_count );
+		$count_label = self::count_label( $seen_count );
 		?>
 		<li class="wp-seen-posts-top-item">
 			<a class="wp-seen-posts-top-link" href="<?php echo esc_url( $url ); ?>">
@@ -190,9 +199,9 @@ final class Top_Seen_Widget extends \WP_Widget {
 				<?php endif; ?>
 				<span class="wp-seen-posts-top-copy">
 					<span class="wp-seen-posts-top-title"><?php echo esc_html( $title ); ?></span>
-					<span class="wp-seen-posts-top-count" aria-label="<?php echo esc_attr( $count_label ); ?>" title="<?php echo esc_attr( $count_label ); ?>">
+					<span class="wp-seen-posts-top-count" data-seen-post-id="<?php echo esc_attr( (string) $post->ID ); ?>" data-seen-count="<?php echo esc_attr( (string) $seen_count ); ?>" aria-label="<?php echo esc_attr( $count_label ); ?>" title="<?php echo esc_attr( $count_label ); ?>">
 						<?php echo Public_Counts::eye_svg_markup(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-						<span aria-hidden="true"><?php echo esc_html( Public_Counts::format_compact( $seen_count ) ); ?></span>
+						<span class="wp-seen-posts-public-value" aria-hidden="true"><?php echo esc_html( Public_Counts::format_compact( $seen_count ) ); ?></span>
 					</span>
 				</span>
 			</a>
@@ -200,16 +209,10 @@ final class Top_Seen_Widget extends \WP_Widget {
 		<?php
 	}
 
-	/** Accessible exact-count label for the selected period. */
-	private static function count_label( string $period, int $count ): string {
+	/** Accessible exact lifetime-count label matching the destination article. */
+	private static function count_label( int $count ): string {
 		$number = number_format_i18n( $count );
-		if ( 'today' === $period ) {
-			$template = _n( 'Seen by %s visitor today', 'Seen by %s visitors today', $count, 'wp-seen-posts' );
-		} elseif ( 'month' === $period ) {
-			$template = _n( 'Seen by %s visitor in the last 30 days', 'Seen by %s visitors in the last 30 days', $count, 'wp-seen-posts' );
-		} else {
-			$template = _n( 'Seen by %s visitor in the last 7 days', 'Seen by %s visitors in the last 7 days', $count, 'wp-seen-posts' );
-		}
+		$template = _n( 'Seen by %s visitor', 'Seen by %s visitors', $count, 'wp-seen-posts' );
 		return sprintf( $template, $number );
 	}
 }

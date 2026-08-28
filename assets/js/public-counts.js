@@ -2,6 +2,8 @@
 	'use strict';
 
 	var config = window.wpSeenPublicCountsConfig || {};
+	var personalCounterSelector = '.wp-seen-posts-public-count[data-seen-post-id]';
+	var reconciledCounterSelector = personalCounterSelector + ', .wp-seen-posts-top-count[data-seen-post-id]';
 	var endpoint = typeof config.endpoint === 'string' ? config.endpoint : '';
 	var readEndpoint = typeof config.readEndpoint === 'string' ? config.readEndpoint : '';
 	var initialCounts = config.initialCounts && !Array.isArray(config.initialCounts) && typeof config.initialCounts === 'object'
@@ -221,6 +223,16 @@
 		return hot + state + '. ' + template.replace('%s', exactNumber(count));
 	}
 
+	function counterLabel(count, node) {
+		if (node && node.classList.contains('wp-seen-posts-top-count')) {
+			var template = count === 1
+				? (config.labelSingular || 'Seen by %s visitor')
+				: (config.labelPlural || 'Seen by %s visitors');
+			return template.replace('%s', exactNumber(count));
+		}
+		return accessibleLabel(count, node);
+	}
+
 	function pendingLabel(node) {
 		var state = node && node.dataset.personalSeenState === 'seen'
 			? (config.personalSeen || 'Seen')
@@ -298,14 +310,16 @@
 		if (!node || node.nodeType !== 1) return;
 		var id = validId(node.dataset.seenPostId);
 		if (!id) return;
-		ensureHotMarker(node, id);
-		if (node.dataset.personalSeenState !== 'seen') node.dataset.personalSeenState = 'unseen';
-		node.classList.toggle('wp-seen-posts-public-count-is-seen', node.dataset.personalSeenState === 'seen');
+		if (!node.classList.contains('wp-seen-posts-top-count')) {
+			ensureHotMarker(node, id);
+			if (node.dataset.personalSeenState !== 'seen') node.dataset.personalSeenState = 'unseen';
+			node.classList.toggle('wp-seen-posts-public-count-is-seen', node.dataset.personalSeenState === 'seen');
+		}
 		if (!nodesById.has(id)) nodesById.set(id, new Set());
 		nodesById.get(id).add(node);
 		var current = parsedCount(node.dataset.seenCount);
 		if (current !== null) {
-			var label = accessibleLabel(current, node);
+			var label = counterLabel(current, node);
 			node.setAttribute('aria-label', label);
 			node.title = label;
 		}
@@ -313,9 +327,9 @@
 
 	function register(root) {
 		if (!root) return;
-		if (root.nodeType === 1 && root.matches('.wp-seen-posts-public-count[data-seen-post-id]')) rememberNode(root);
+		if (root.nodeType === 1 && root.matches(reconciledCounterSelector)) rememberNode(root);
 		if (typeof root.querySelectorAll === 'function') {
-			root.querySelectorAll('.wp-seen-posts-public-count[data-seen-post-id]').forEach(rememberNode);
+			root.querySelectorAll(reconciledCounterSelector).forEach(rememberNode);
 		}
 		scheduleReconciliation();
 	}
@@ -363,7 +377,7 @@
 			if (value) value.textContent = formatCompact(count);
 			node.dataset.seenCount = String(count);
 			delete node.dataset.seenCountPending;
-			var label = accessibleLabel(count, node);
+			var label = counterLabel(count, node);
 			node.setAttribute('aria-label', label);
 			node.title = label;
 		});
@@ -372,9 +386,9 @@
 	function setPersonalState(root, seen) {
 		if (!root) return;
 		var nodes = [];
-		if (root.nodeType === 1 && root.matches('.wp-seen-posts-public-count[data-seen-post-id]')) nodes.push(root);
+		if (root.nodeType === 1 && root.matches(personalCounterSelector)) nodes.push(root);
 		if (typeof root.querySelectorAll === 'function') {
-			root.querySelectorAll('.wp-seen-posts-public-count[data-seen-post-id]').forEach(function (node) { nodes.push(node); });
+			root.querySelectorAll(personalCounterSelector).forEach(function (node) { nodes.push(node); });
 		}
 		nodes.forEach(function (node) {
 			rememberNode(node);

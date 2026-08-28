@@ -79,6 +79,22 @@ test('quietly reconciles a stale cached total without incrementing it', async ()
 	assert.equal(value.textContent, '3');
 });
 
+test('keeps a cached widget count aligned with the article lifetime total', async () => {
+	const { window, requests } = boot({
+		markup: '<span class="wp-seen-posts-top-count" data-seen-post-id="1400" data-seen-count="20" aria-label="old"><svg></svg><span class="wp-seen-posts-public-value">20</span></span>',
+		readResponseCounts: { 1400: 23 }
+	});
+	const node = window.document.querySelector('.wp-seen-posts-top-count');
+	await new Promise((resolve) => window.setTimeout(resolve, 230));
+	assert.equal(requests.length, 1);
+	assert.equal(requests[0].isRead, true);
+	assert.deepEqual(requests[0].ids, ['1400']);
+	assert.equal(node.querySelector('.wp-seen-posts-public-value').textContent, '23');
+	assert.equal(node.dataset.seenCount, '23');
+	assert.equal(node.dataset.personalSeenState, undefined);
+	assert.equal(node.getAttribute('aria-label'), 'Seen by 23 visitors');
+});
+
 test('restores a cached weekly-hot fire before the eye with an accessible explanation', () => {
 	const { window } = boot({
 		markup: '<article id="post-22"></article>',

@@ -13,6 +13,17 @@ if ( ! class_exists( 'WP_Widget' ) ) {
 	}
 }
 
+if ( ! class_exists( 'WP_Post' ) ) {
+	class WP_Post {
+		public $ID;
+		public $post_type = 'post';
+		public $post_status = 'publish';
+		public function __construct( $post_id ) {
+			$this->ID = (int) $post_id;
+		}
+	}
+}
+
 function __( $text ) {
 	return $text;
 }
@@ -33,12 +44,54 @@ function sanitize_text_field( $value ) {
 	return trim( strip_tags( (string) $value ) );
 }
 
+function esc_attr( $value ) {
+	return htmlspecialchars( (string) $value, ENT_QUOTES, 'UTF-8' );
+}
+
+function esc_html( $value ) {
+	return htmlspecialchars( (string) $value, ENT_QUOTES, 'UTF-8' );
+}
+
+function esc_url( $value ) {
+	return (string) $value;
+}
+
+function number_format_i18n( $value ) {
+	return number_format( (int) $value );
+}
+
 function current_datetime() {
 	return new DateTimeImmutable( '2026-08-22', new DateTimeZone( 'Asia/Tbilisi' ) );
 }
 
-function get_posts() {
-	return array( 18, 17 );
+function get_posts( $args = array() ) {
+	if ( isset( $args['fields'] ) && 'ids' === $args['fields'] ) {
+		return array( 18, 17 );
+	}
+	$post_ids = isset( $args['post__in'] ) ? $args['post__in'] : array( 18, 17 );
+	return array_map(
+		static function ( $post_id ) {
+			return new WP_Post( $post_id );
+		},
+		$post_ids
+	);
+}
+
+function wp_list_pluck( $items, $field ) {
+	return array_map(
+		static function ( $item ) use ( $field ) {
+			return is_array( $item ) ? $item[ $field ] : $item->{$field};
+		},
+		$items
+	);
+}
+
+function get_the_title( $post ) {
+	return 'Article ' . $post->ID;
+}
+
+function get_permalink( $post ) {
+	return 'https://example.test/article-' . $post->ID . '/';
 }
 
 $GLOBALS['wp_seen_widget_transients'] = array();
@@ -70,6 +123,12 @@ class WP_Seen_Posts_Widget_DB {
 
 	public function get_results( $sql ) {
 		$this->queries[] = $sql;
+		if ( false !== strpos( $sql, 'test_hmv_seen_counts' ) ) {
+			return array(
+				array( 'post_id' => 18, 'seen_count' => 120 ),
+				array( 'post_id' => 17, 'seen_count' => 80 ),
+			);
+		}
 		return array(
 			array( 'post_id' => 18, 'seen_count' => 41, 'latest_seen' => '2026-08-22' ),
 			array( 'post_id' => 17, 'seen_count' => 30, 'latest_seen' => '2026-08-22' ),
@@ -162,6 +221,32 @@ if (
 	|| false === strpos( Public_Counts::eye_svg_markup(), 'viewBox="0 0 20 20"' )
 ) {
 	fwrite( STDERR, 'Shared widget eye icon failed.' . PHP_EOL );
+	exit( 1 );
+}
+
+ob_start();
+$widget->widget(
+	array(
+		'before_widget' => '<section>',
+		'after_widget'  => '</section>',
+		'before_title'  => '<h2>',
+		'after_title'   => '</h2>',
+	),
+	array(
+		'title'   => 'Top Seen Posts',
+		'period'  => 'week',
+		'limit'   => 2,
+		'display' => 'text',
+	)
+);
+$widget_output = ob_get_clean();
+if (
+	false === strpos( $widget_output, '<p class="wp-seen-posts-top-period">Last 7 days</p>' )
+	|| false === strpos( $widget_output, 'data-seen-post-id="18" data-seen-count="120"' )
+	|| false === strpos( $widget_output, 'aria-label="Seen by 120 visitors"' )
+	|| false !== strpos( $widget_output, 'Seen by 41 visitors' )
+) {
+	fwrite( STDERR, 'Widget output must explain its ranking period while displaying reconciled lifetime totals.' . PHP_EOL );
 	exit( 1 );
 }
 

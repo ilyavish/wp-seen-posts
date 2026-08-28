@@ -11,6 +11,13 @@
 	padding: 0;
 }
 
+.widget_wp_seen_posts_top .wp-seen-posts-top-period {
+	color: #646970;
+	font-size: 0.75rem;
+	line-height: 1.2;
+	margin: -0.35rem 0 0.7rem;
+}
+
 .widget_wp_seen_posts_top .wp-seen-posts-top-link {
 	align-items: center;
 	color: inherit;
