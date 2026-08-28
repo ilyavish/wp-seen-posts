@@ -139,6 +139,11 @@
 		var previewLoadingTimer = null;
 		var previewLoadingVisible = false;
 		var unseenPrefetchPageLimit = Math.max(0, Math.min(8, Math.floor(Number(config.unseenPrefetchPageLimit) || 0)));
+		var unseenPrefetchConcurrency = Math.max(1, Math.min(3, Math.floor(Number(config.unseenPrefetchConcurrency) || 2)));
+		var unseenSearchActive = false;
+		var unseenAdvancePending = false;
+		var infiniteControlsObserver = null;
+		var observedInfiniteControls = null;
 		var nativeFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
 		var warmedPageResponses = new Map();
 
@@ -232,20 +237,37 @@
 			var estimatedPages = Math.max(1, Math.ceil(historyAtLoad.size / pageSize));
 			var urls = upcomingPageUrls(startUrl, Math.min(unseenPrefetchPageLimit, estimatedPages));
 			if (!urls.length || !installWarmedFetchBridge()) return;
-			urls.forEach(function (url) {
-				var request = nativeFetch(url, {
+			var tasks = urls.map(function (url) {
+				var resolveTask;
+				var rejectTask;
+				var request = new Promise(function (resolve, reject) {
+					resolveTask = resolve;
+					rejectTask = reject;
+				});
+				warmedPageResponses.set(url, request);
+				request.catch(function () {});
+				return { url: url, resolve: resolveTask, reject: rejectTask };
+			});
+
+			function runNextWarmTask() {
+				var task = tasks.shift();
+				if (!task) return;
+				nativeFetch(task.url, {
 					credentials: 'same-origin',
 					headers: { Accept: 'text/html' }
 				}).then(function (response) {
 					if (!response || !response.ok || typeof response.clone !== 'function') throw new Error('Unseen-page prefetch failed.');
-					return response;
+					task.resolve(response);
 				}).catch(function (error) {
-					warmedPageResponses.delete(url);
-					throw error;
-				});
-				warmedPageResponses.set(url, request);
-				request.catch(function () {});
-			});
+					warmedPageResponses.delete(task.url);
+					task.reject(error);
+				}).then(runNextWarmTask);
+			}
+
+			var workerCount = Math.min(unseenPrefetchConcurrency, tasks.length);
+			for (var worker = 0; worker < workerCount; worker += 1) {
+				runNextWarmTask();
+			}
 		}
 
 		function flushHistory(forcePrune) {
@@ -508,6 +530,26 @@
 			}, previewLoadingDelay);
 		}
 
+		function hasStableVisibleCard() {
+			var found = false;
+			cards.forEach(function (card, id) {
+				if (!reloadPreviewIds.has(id) && !card.classList.contains('wp-seen-posts-is-hidden')) found = true;
+			});
+			return found;
+		}
+
+		function setUnseenSearchActive(value) {
+			value = Boolean(value);
+			unseenSearchActive = value;
+			document.documentElement.classList.toggle('wp-seen-posts-searching-unseen', value);
+			var infiniteControls = document.querySelector('.wp-pfis-controls');
+			if (infiniteControls) {
+				if (value) infiniteControls.setAttribute('aria-busy', 'true');
+				else infiniteControls.removeAttribute('aria-busy');
+			}
+			updateUi();
+		}
+
 		function updateUi() {
 			updateAchievements();
 			var count = seenCardCount;
@@ -519,37 +561,66 @@
 			var allHidden = !showSeen && cards.size > 0 && visible === 0 && count === cards.size;
 			var canStillAdvance = !feedExhausted && (infiniteReady || document.readyState !== 'complete');
 			var previewOnly = !showSeen && reloadPreviewIds.size > 0 && count === cards.size;
-			var waitingWithPreview = previewOnly && canStillAdvance;
+			var waitingWithPreview = unseenSearchActive && previewOnly && canStillAdvance;
 			updatePreviewLoading(waitingWithPreview);
-			var findingWithPreview = waitingWithPreview && previewLoadingVisible;
-			empty.textContent = findingWithPreview
+			var findingUnseen = unseenSearchActive && canStillAdvance && !hasStableVisibleCard() && (!previewOnly || previewLoadingVisible);
+			empty.textContent = findingUnseen
 				? (config.i18n.findingUnseen || 'Finding unseen posts…')
 				: (canStillAdvance ? config.i18n.loadingUnseen : (feedExhausted ? config.i18n.caughtUp : config.i18n.noUnseenPage));
-			empty.classList.toggle('wp-seen-posts-empty-loading', (allHidden && canStillAdvance) || findingWithPreview);
-			empty.classList.toggle('wp-seen-posts-empty-preview-loading', findingWithPreview);
-			empty.hidden = !(allHidden || findingWithPreview || (previewOnly && !canStillAdvance));
+			empty.classList.toggle('wp-seen-posts-empty-loading', (allHidden && canStillAdvance) || findingUnseen);
+			empty.classList.toggle('wp-seen-posts-empty-preview-loading', waitingWithPreview && previewLoadingVisible);
+			empty.classList.toggle('wp-seen-posts-empty-searching', findingUnseen);
+			empty.hidden = !(allHidden || findingUnseen || (previewOnly && !canStillAdvance));
+		}
+
+		function observeInfiniteControls(infiniteControls) {
+			if (observedInfiniteControls === infiniteControls) return;
+			if (infiniteControlsObserver) infiniteControlsObserver.disconnect();
+			observedInfiniteControls = infiniteControls;
+			if (!infiniteControls || typeof window.MutationObserver !== 'function') return;
+			infiniteControlsObserver = new window.MutationObserver(function () {
+				if (unseenSearchActive) window.setTimeout(continueFeedIfNeeded, 0);
+			});
+			infiniteControlsObserver.observe(infiniteControls, {
+				attributes: true,
+				attributeFilter: ['aria-disabled', 'href', 'class'],
+				childList: true,
+				subtree: true
+			});
 		}
 
 		function refreshFeedExhaustion() {
 			var infiniteControls = document.querySelector('.wp-pfis-controls');
+			observeInfiniteControls(infiniteControls);
 			if (infiniteControls) {
 				infiniteReady = true;
 				feedExhausted = !infiniteControls.querySelector('.wp-pfis-load-more') && !infiniteControls.querySelector('.wp-pfis-sentinel');
 			}
+			if (feedExhausted) setUnseenSearchActive(false);
 			updateUi();
 		}
 
 		function requestMoreIfAllHidden() {
-			if (feedExhausted || showSeen || !cards.size) return;
-			var hasVisibleCard = false;
-			cards.forEach(function (card, id) {
-				if (!reloadPreviewIds.has(id) && !card.classList.contains('wp-seen-posts-is-hidden')) hasVisibleCard = true;
-			});
-			if (hasVisibleCard) return;
+			if (feedExhausted || showSeen || !cards.size) {
+				setUnseenSearchActive(false);
+				return;
+			}
+			if (hasStableVisibleCard()) {
+				setUnseenSearchActive(false);
+				return;
+			}
+			if (document.querySelector('.wp-pfis-pagination-fallback.is-prominent')) {
+				unseenAdvancePending = false;
+				setUnseenSearchActive(false);
+				return;
+			}
 
+			setUnseenSearchActive(true);
+			if (unseenAdvancePending) return;
 			var loadMore = document.querySelector('.wp-pfis-load-more:not([aria-disabled="true"]):not(:disabled)');
 			if (loadMore) {
 				warmUpcomingPages(loadMore.href || loadMore.getAttribute('href') || '');
+				unseenAdvancePending = true;
 				loadMore.click();
 			}
 		}
@@ -675,6 +746,7 @@
 
 		function setShowSeen(value) {
 			showSeen = value;
+			if (value) setUnseenSearchActive(false);
 			if (!value) {
 				/* Hide only the session posts that are already Seen at this tap. New
 				 * posts loaded afterward must remain stable until another Hide tap. */
@@ -709,6 +781,7 @@
 			seenCardCount = 0;
 			hiddenCardCount = 0;
 			showSeen = false;
+			setUnseenSearchActive(false);
 			cards.forEach(function (card) {
 				card.classList.remove('wp-seen-posts-is-seen', 'wp-seen-posts-is-hidden', 'wp-seen-posts-reload-preview');
 				card.removeAttribute('aria-hidden');
@@ -725,6 +798,7 @@
 
 		document.addEventListener('wpFeedPostsAdded', function (event) {
 			if (!event.detail || event.detail.container !== feed || !event.detail.posts) return;
+			unseenAdvancePending = false;
 			initializePosts(event.detail.posts);
 			/* Wait until the companion loader finishes updating its controls, then skip an all-Seen page. */
 			window.setTimeout(continueFeedIfNeeded, 0);
@@ -738,7 +812,9 @@
 
 		document.addEventListener('wpFeedInfiniteScrollFinished', function (event) {
 			if (event.detail && event.detail.container && event.detail.container !== feed) return;
+			unseenAdvancePending = false;
 			feedExhausted = true;
+			setUnseenSearchActive(false);
 			updateUi();
 		});
 		window.addEventListener('load', function () { if (!infiniteReady) updateUi(); }, { once: true });

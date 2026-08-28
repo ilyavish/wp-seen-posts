@@ -4,7 +4,7 @@ Tags: seen posts, unread, popular posts, analytics, p2
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.3.3
+Stable tag: 1.3.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,7 +18,8 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Adapts the visibility measurement for posts taller than the viewport.
 * Keeps newly Seen posts visible for the rest of the current page session to prevent scroll-time layout shifts.
 * Shows one compact caught-up status only when no more archive pages remain.
-* Downloads a bounded batch of fully Seen archive pages in parallel, while the companion infinite-scroll control still inserts them in order.
+* Queues a bounded batch of fully Seen archive pages through a two-request warm-up pipeline, while the companion infinite-scroll control still inserts them in order.
+* Resumes automatic unseen discovery when a temporarily disabled loader settles, without flashing Load More or intermediate status text between pages.
 * Keeps two recent Seen cards visible as a stable preview if a reload would otherwise look empty.
 * Shows “Finding unseen posts…” only when background loading behind that preview takes longer than 500 milliseconds.
 * Uses one subtle bottom-right eye/count per card: gray for personally Unseen and fully opaque for Seen.
@@ -64,6 +65,11 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.3.4 =
+* Replaces burst archive prefetching with a two-request warm-up pipeline, reducing server contention while preserving exact page order.
+* Keeps unseen discovery active while the companion loader is temporarily disabled and resumes immediately when its controls settle.
+* Replaces the flashing Load More and intermediate status with one fixed “Finding unseen posts…” indicator, while retaining the loader's manual failure fallback.
 
 = 1.3.3 =
 * Keeps Top Seen ranking based on the selected Today, 7-day, or 30-day period while displaying the same lifetime eye total as the destination article.

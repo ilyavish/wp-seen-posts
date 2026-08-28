@@ -265,7 +265,8 @@
 	opacity: 0.75;
 }
 
-.wp-seen-posts-empty-preview-loading {
+.wp-seen-posts-empty-preview-loading,
+.wp-seen-posts-empty-searching {
 	background: #1d2327;
 	border: 0;
 	border-radius: 999px;
@@ -288,6 +289,13 @@
 }
 
 .wp-seen-posts-empty[hidden] { display: none; }
+
+/* Automatic unseen discovery owns the loading state. Keep the companion
+ * loader available to scripts without flashing its button/status between pages. */
+.wp-seen-posts-searching-unseen .wp-pfis-controls .wp-pfis-load-more,
+.wp-seen-posts-searching-unseen .wp-pfis-controls .wp-pfis-status {
+	display: none !important;
+}
 
 /* Post Views Counter uses WordPress Dashicons for its selectable counter icon.
  * Embed the matching visibility glyph so the front end needs no icon-font request. */

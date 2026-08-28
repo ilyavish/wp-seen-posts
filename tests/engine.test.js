@@ -44,7 +44,7 @@ async function boot(history = {}, options = {}) {
 		<ul id="postlist">
 			${postMarkup}
 		</ul>
-		<div class="wp-pfis-controls"><a href="${options.nextPageUrl || 'https://example.com/page/2/'}" class="wp-pfis-load-more">Load more</a><div class="wp-pfis-sentinel"></div></div>
+		<div class="wp-pfis-controls"><a href="${options.nextPageUrl || 'https://example.com/page/2/'}" class="wp-pfis-load-more">Load more</a><p class="wp-pfis-status">More posts loaded.</p><div class="wp-pfis-sentinel"></div></div>
 	</main></body></html>`, { url: 'https://example.com/', runScripts: 'outside-only' });
 	const { window } = dom;
 	Object.defineProperty(window.document, 'visibilityState', { value: 'visible', configurable: true });
@@ -87,6 +87,7 @@ async function boot(history = {}, options = {}) {
 		reloadPreviewCount: options.reloadPreviewCount ?? 2,
 		previewLoadingDelay: options.previewLoadingDelay ?? 500,
 		unseenPrefetchPageLimit: options.unseenPrefetchPageLimit ?? 0,
+		unseenPrefetchConcurrency: options.unseenPrefetchConcurrency ?? 2,
 		maxEntries: 3000, retentionDays: 365, badges: badges(), i18n: strings()
 	};
 	window.confirm = () => true;
@@ -577,7 +578,7 @@ test('allows half a viewport to qualify an exceptionally tall post', async () =>
 	assert.equal(tallCard.dataset.seenPostState, 'seen');
 });
 
-test('warms consecutive Seen archive pages in parallel for a returning visitor', async () => {
+test('warms consecutive Seen archive pages through a two-request pipeline', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const history = Object.fromEntries(Array.from({ length: 50 }, (_, index) => [String(index + 1), now]));
 	const requests = [];
@@ -593,6 +594,7 @@ test('warms consecutive Seen archive pages in parallel for a returning visitor',
 		postCount: 10,
 		hasMorePages: true,
 		unseenPrefetchPageLimit: 6,
+		unseenPrefetchConcurrency: 2,
 		beforeEval(currentWindow) {
 			currentWindow.fetch = (input) => {
 				const url = String(input);
@@ -604,17 +606,27 @@ test('warms consecutive Seen archive pages in parallel for a returning visitor',
 
 	assert.deepEqual(requests, [
 		'https://example.com/page/2/',
-		'https://example.com/page/3/',
-		'https://example.com/page/4/',
-		'https://example.com/page/5/',
-		'https://example.com/page/6/'
+		'https://example.com/page/3/'
 	]);
 	const warmed = window.fetch('https://example.com/page/2/', { method: 'GET' });
-	assert.equal(requests.length, 5);
+	assert.equal(requests.length, 2);
 	resolvers.get('https://example.com/page/2/')(responseFor('https://example.com/page/2/'));
 	const response = await warmed;
 	assert.equal(await response.text(), '<html data-source="https://example.com/page/2/"></html>');
-	assert.equal(requests.length, 5);
+	await new Promise((resolve) => window.setTimeout(resolve, 0));
+	assert.deepEqual(requests, [
+		'https://example.com/page/2/',
+		'https://example.com/page/3/',
+		'https://example.com/page/4/'
+	]);
+	resolvers.get('https://example.com/page/3/')(responseFor('https://example.com/page/3/'));
+	await new Promise((resolve) => window.setTimeout(resolve, 0));
+	assert.equal(requests.at(-1), 'https://example.com/page/5/');
+	resolvers.get('https://example.com/page/4/')(responseFor('https://example.com/page/4/'));
+	await new Promise((resolve) => window.setTimeout(resolve, 0));
+	assert.equal(requests.at(-1), 'https://example.com/page/6/');
+	resolvers.get('https://example.com/page/5/')(responseFor('https://example.com/page/5/'));
+	resolvers.get('https://example.com/page/6/')(responseFor('https://example.com/page/6/'));
 });
 
 test('falls back to the normal archive request when a warmed response fails', async () => {
@@ -662,6 +674,61 @@ test('does not warm archive pages while an Unseen card is already visible', asyn
 		}
 	});
 	assert.deepEqual(requests, []);
+});
+
+test('resumes unseen discovery when the companion loader re-enables its button', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const { window, loadMoreClicks } = await boot({ 1: now, 2: now, 3: now }, {
+		postCount: 3,
+		hasMorePages: true,
+		reloadPreviewCount: 0,
+		beforeEval(currentWindow) {
+			currentWindow.document.querySelector('.wp-pfis-load-more').setAttribute('aria-disabled', 'true');
+		}
+	});
+	const loadMore = window.document.querySelector('.wp-pfis-load-more');
+	const controls = window.document.querySelector('.wp-pfis-controls');
+	const empty = window.document.querySelector('.wp-seen-posts-empty');
+	assert.equal(loadMoreClicks(), 0);
+	assert.equal(window.document.documentElement.classList.contains('wp-seen-posts-searching-unseen'), true);
+	assert.equal(controls.getAttribute('aria-busy'), 'true');
+	assert.equal(empty.hidden, false);
+	assert.equal(empty.textContent, 'Finding unseen posts…');
+
+	loadMore.removeAttribute('aria-disabled');
+	await new Promise((resolve) => window.setTimeout(resolve, 10));
+	assert.equal(loadMoreClicks(), 1);
+
+	const feed = window.document.querySelector('#postlist');
+	const unseen = window.document.createElement('li');
+	unseen.id = 'prologue-4';
+	unseen.className = 'post post-4';
+	feed.appendChild(unseen);
+	window.document.dispatchEvent(new window.CustomEvent('wpFeedPostsAdded', { detail: { container: feed, posts: [unseen] } }));
+	await new Promise((resolve) => window.setTimeout(resolve, 5));
+	assert.equal(window.document.documentElement.classList.contains('wp-seen-posts-searching-unseen'), false);
+	assert.equal(controls.hasAttribute('aria-busy'), false);
+	assert.equal(empty.hidden, true);
+});
+
+test('restores the companion loader fallback after an automatic search failure', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const { window, loadMoreClicks } = await boot({ 1: now, 2: now }, {
+		hasMorePages: true,
+		reloadPreviewCount: 0
+	});
+	const controls = window.document.querySelector('.wp-pfis-controls');
+	assert.equal(loadMoreClicks(), 1);
+	assert.equal(window.document.documentElement.classList.contains('wp-seen-posts-searching-unseen'), true);
+
+	const fallback = window.document.createElement('a');
+	fallback.className = 'wp-pfis-pagination-fallback is-prominent';
+	fallback.textContent = 'Continue loading posts';
+	controls.appendChild(fallback);
+	await new Promise((resolve) => window.setTimeout(resolve, 10));
+	assert.equal(window.document.documentElement.classList.contains('wp-seen-posts-searching-unseen'), false);
+	assert.equal(controls.hasAttribute('aria-busy'), false);
+	assert.equal(fallback.textContent, 'Continue loading posts');
 });
 
 test('replaces the immediate loading status with caught up only after the feed is exhausted', async () => {
