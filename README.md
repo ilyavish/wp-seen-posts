@@ -39,6 +39,12 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 - A new local Unseen-to-Seen transition queues its post ID for one anonymous batched REST increment; existing local history is never retroactively submitted.
 - A separate fixed-size anonymous browser ledger remembers public increments after personal Seen history is reset or pruned. Its encoded storage remains about 22 KB regardless of how many pages are revisited.
 - Public count storage uses one lifetime row per post and one daily row per active post/site-local date. Rarity adds one compact salted anonymous-browser hash row and tiny aggregate stat rows; it stores no IP addresses, user agents, referrers, raw identity tokens, or individual view events.
+- A separate first-party **Seen Analytics** dashboard counts qualified page views and anonymous visitors for posts, pages, the homepage, category/tag/taxonomy/author/date archives, searches, and 404 routes. It is independent from Seen state and public post counters.
+- Analytics sends one small same-origin beacon after 1,000 visible milliseconds, ignores ordinary crawlers and site administrators, respects Do Not Track and Global Privacy Control by default, and suppresses repeat reloads of the same route for 30 minutes.
+- Paginated and infinite-scroll entry points aggregate into their parent homepage or archive route, so `/page/2/` does not fragment reports. Search terms are never transmitted or stored.
+- Analytics stores only salted anonymous-browser hashes: no IP addresses, raw browser tokens, referrers, or user agents. Exact visitor rows are retained for 45 days, realtime rows for two hours, and daily route aggregates for 400 days, keeping database growth bounded.
+- The responsive admin report includes Today, 7-day, and 30-day views, exact unique visitors, views per visitor, live activity, daily bars, top destinations, and page-type totals.
+- Analytics starts clean after the 1.4.0 upgrade. Existing public Seen totals are not backfilled because a lifetime unique Seen count cannot be truthfully converted into historical pageviews or archive visitors.
 - Daily aggregate buckets are retained for 400 site-local days, supporting Today/Week/Month and year-over-year trend work; one indexed daily cleanup prunes older buckets while permanent lifetime totals remain unchanged.
 - The bundled **Top Seen Posts** widget ranks published posts for Today, Last 7 Days, or Last 30 Days with text, image-list, or responsive image-grid layouts. Its visible eye uses the same reconciled lifetime total as the destination article, while a subtle label explains the selected ranking period. Multiple instances can show all three periods at once.
 - The widget retains the objective weekly ranking. Its discovery-focused 🔥 marker skips the two newest posts, requires at least five Seen visitors during the week, and marks up to seven older weekly leaders on feeds, archives, and single-post action rows.
@@ -67,6 +73,14 @@ A lightweight WordPress plugin that gives archive feeds local Seen/Unseen state.
 npm install
 npm test
 ```
+
+## Analytics controls and hooks
+
+Settings > Seen Posts contains the enable switch, visible-time delay, reload-deduplication window, and browser-privacy-signal control. Reports appear under **Seen Analytics** in the WordPress admin menu.
+
+- `wp_seen_posts_analytics_daily_retention_days`
+- `wp_seen_posts_analytics_visitor_retention_days`
+- `wp_seen_posts_analytics_is_bot`
 
 ## Streak and rarity hooks
 

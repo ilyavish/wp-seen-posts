@@ -4,7 +4,7 @@ Tags: seen posts, unread, popular posts, analytics, p2
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.3.6
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -42,13 +42,20 @@ WP Seen Posts adds Reddit-style read/unread behavior to normal WordPress feeds w
 * Shows an optional compact streak/progress chip and provides `[seen_unseen_streak]` plus a template helper.
 * Adds privacy-safe cached badge rarity after a configurable minimum sample, without scanning reader rows during page rendering.
 * Adds a Streaks & Rarity section under Settings > Seen Posts.
+* Adds standalone first-party analytics for posts, pages, the homepage, category/tag/taxonomy/author/date archives, searches, and 404 routes.
+* Reports Today, 7-day, and 30-day views, exact anonymous visitors, views per visitor, last-hour activity, daily trends, top destinations, and page-type totals under Seen Analytics.
+* Aggregates paginated and infinite-scroll archive entry points into their parent route instead of fragmenting `/page/2/` and later pages.
+* Qualifies a view after one visible second and suppresses reloads of the same route for 30 minutes while still counting a later return as another view.
+* Keeps analytics independent from Show/Hide/Reset Seen and from public eye counters; those controls cannot create analytics events.
+* Stores no IP addresses, search terms, referrers, user agents, or raw visitor tokens. Anonymous hashes and realtime rows are automatically pruned, and daily aggregates have bounded retention.
+* Respects Do Not Track and Global Privacy Control by default and excludes ordinary crawlers and site administrators.
 * Stores anonymous history only in localStorage, with age and size pruning.
 * Supports P2 and P2 Resurrected automatically.
 * Supports Query Loop blocks and conservative classic-theme markup.
 * Consumes the `wpFeedPostsAdded` event emitted by WP Progressive Infinite Scroll.
 * Includes optional feed and post selector overrides under Settings > Seen Posts.
 
-It does not implement infinite scrolling, personalize WordPress queries, use cookies, or make per-post AJAX requests.
+It does not implement infinite scrolling, personalize WordPress queries, use third-party analytics cookies, or make per-post analytics requests.
 
 == Installation ==
 
@@ -66,6 +73,12 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.4.0 =
+* Adds standalone first-party views/visitors analytics for posts, pages, the homepage, archives, categories, tags, taxonomies, search, and 404 routes.
+* Adds a responsive Seen Analytics dashboard with Today, 7-day, and 30-day summaries, exact range visitors, live activity, daily charts, top destinations, and page-type reports.
+* Uses a one-second visible qualification, a configurable 30-minute route reload window, signed same-origin beacons, crawler/admin exclusion, and browser privacy-signal support.
+* Keeps analytics completely separate from Seen controls and public counters while bounding visitor rows to 45 days, realtime rows to two hours, and daily aggregates to 400 days.
 
 = 1.3.6 =
 * Replaces multi-batch searching on the standard posts home with a small cached public post-ID index embedded in the page and one target archive request started by the head bootstrap.

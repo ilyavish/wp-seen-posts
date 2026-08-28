@@ -26,6 +26,14 @@ final class Settings {
 		'zapoi_enabled'          => true,
 	);
 
+	/** @var array<string,mixed> */
+	private const ANALYTICS_DEFAULTS = array(
+		'analytics_enabled'        => true,
+		'analytics_delay_ms'       => 1000,
+		'analytics_dedupe_minutes' => 30,
+		'analytics_respect_dnt'    => true,
+	);
+
 	public static function init(): void {
 		add_action( 'admin_init', array( self::class, 'register' ) );
 		add_action( 'admin_menu', array( self::class, 'menu' ) );
@@ -83,6 +91,30 @@ final class Settings {
 				array( self::class, 'gamification_field' ),
 				'wp_seen_posts',
 				'wp_seen_posts_gamification',
+				array_merge( $field, array( 'key' => $key ) )
+			);
+		}
+
+		add_settings_section(
+			'wp_seen_posts_analytics',
+			__( 'First-party analytics', 'wp-seen-posts' ),
+			array( self::class, 'analytics_section' ),
+			'wp_seen_posts'
+		);
+
+		$analytics_fields = array(
+			'analytics_enabled'        => array( 'label' => __( 'Enable page analytics', 'wp-seen-posts' ), 'type' => 'checkbox' ),
+			'analytics_delay_ms'       => array( 'label' => __( 'Visible time before counting (milliseconds)', 'wp-seen-posts' ), 'type' => 'number', 'min' => 250, 'max' => 10000 ),
+			'analytics_dedupe_minutes' => array( 'label' => __( 'Reload deduplication window (minutes)', 'wp-seen-posts' ), 'type' => 'number', 'min' => 5, 'max' => 240 ),
+			'analytics_respect_dnt'    => array( 'label' => __( 'Respect browser privacy signals', 'wp-seen-posts' ), 'type' => 'checkbox' ),
+		);
+		foreach ( $analytics_fields as $key => $field ) {
+			add_settings_field(
+				'wp_seen_posts_' . $key,
+				$field['label'],
+				array( self::class, 'analytics_field' ),
+				'wp_seen_posts',
+				'wp_seen_posts_analytics',
 				array_merge( $field, array( 'key' => $key ) )
 			);
 		}
@@ -146,10 +178,38 @@ final class Settings {
 		return self::streaks_enabled() && (bool) self::get_gamification()['zapoi_enabled'];
 	}
 
+	/** Return normalized standalone analytics settings. */
+	public static function get_analytics(): array {
+		$value = get_option( OPTION, array() );
+		$value = is_array( $value ) ? $value : array();
+		return array(
+			'analytics_enabled'        => isset( $value['analytics_enabled'] ) ? (bool) $value['analytics_enabled'] : self::ANALYTICS_DEFAULTS['analytics_enabled'],
+			'analytics_delay_ms'       => isset( $value['analytics_delay_ms'] ) ? min( 10000, max( 250, (int) $value['analytics_delay_ms'] ) ) : self::ANALYTICS_DEFAULTS['analytics_delay_ms'],
+			'analytics_dedupe_minutes' => isset( $value['analytics_dedupe_minutes'] ) ? min( 240, max( 5, (int) $value['analytics_dedupe_minutes'] ) ) : self::ANALYTICS_DEFAULTS['analytics_dedupe_minutes'],
+			'analytics_respect_dnt'    => isset( $value['analytics_respect_dnt'] ) ? (bool) $value['analytics_respect_dnt'] : self::ANALYTICS_DEFAULTS['analytics_respect_dnt'],
+		);
+	}
+
+	public static function analytics_enabled(): bool {
+		return (bool) self::get_analytics()['analytics_enabled'];
+	}
+
+	public static function analytics_delay_ms(): int {
+		return (int) self::get_analytics()['analytics_delay_ms'];
+	}
+
+	public static function analytics_dedupe_minutes(): int {
+		return (int) self::get_analytics()['analytics_dedupe_minutes'];
+	}
+
+	public static function analytics_respects_dnt(): bool {
+		return (bool) self::get_analytics()['analytics_respect_dnt'];
+	}
+
 	/** @param mixed $input @return array<string,mixed> */
 	public static function sanitize( $input ): array {
 		if ( ! is_array( $input ) ) {
-			return self::GAMIFICATION_DEFAULTS;
+			return array_merge( self::GAMIFICATION_DEFAULTS, self::ANALYTICS_DEFAULTS );
 		}
 		$output = array(
 			'streaks_enabled'         => ! empty( $input['streaks_enabled'] ),
@@ -158,6 +218,10 @@ final class Settings {
 			'rarity_min_readers'      => isset( $input['rarity_min_readers'] ) ? min( 1000000, max( 5, absint( $input['rarity_min_readers'] ) ) ) : self::GAMIFICATION_DEFAULTS['rarity_min_readers'],
 			'streak_progress_enabled' => ! empty( $input['streak_progress_enabled'] ),
 			'zapoi_enabled'           => ! empty( $input['zapoi_enabled'] ),
+			'analytics_enabled'       => ! empty( $input['analytics_enabled'] ),
+			'analytics_delay_ms'      => isset( $input['analytics_delay_ms'] ) ? min( 10000, max( 250, absint( $input['analytics_delay_ms'] ) ) ) : self::ANALYTICS_DEFAULTS['analytics_delay_ms'],
+			'analytics_dedupe_minutes'=> isset( $input['analytics_dedupe_minutes'] ) ? min( 240, max( 5, absint( $input['analytics_dedupe_minutes'] ) ) ) : self::ANALYTICS_DEFAULTS['analytics_dedupe_minutes'],
+			'analytics_respect_dnt'   => ! empty( $input['analytics_respect_dnt'] ),
 		);
 		foreach ( self::FIELDS as $key => $label ) {
 			if ( empty( $input[ $key ] ) ) {
@@ -179,6 +243,10 @@ final class Settings {
 		echo '<p>' . esc_html__( 'Streak state stays in each reader’s browser. Only salted anonymous identifiers and aggregate badge totals are stored for rarity.', 'wp-seen-posts' ) . '</p>';
 	}
 
+	public static function analytics_section(): void {
+		echo '<p>' . esc_html__( 'Counts qualified views and anonymous visitors on posts, pages, the homepage, archives, categories, tags, search, and 404 routes. It never stores IP addresses, search terms, or Seen history.', 'wp-seen-posts' ) . '</p>';
+	}
+
 	/** @param array{key:string} $args */
 	public static function field( array $args ): void {
 		$key   = $args['key'];
@@ -195,6 +263,32 @@ final class Settings {
 	public static function gamification_field( array $args ): void {
 		$key      = (string) $args['key'];
 		$settings = self::get_gamification();
+		$value    = $settings[ $key ] ?? '';
+		if ( 'checkbox' === $args['type'] ) {
+			printf(
+				'<label><input type="checkbox" name="%1$s[%2$s]" value="1" %3$s> %4$s</label>',
+				esc_attr( OPTION ),
+				esc_attr( $key ),
+				checked( (bool) $value, true, false ),
+				esc_html__( 'Enabled', 'wp-seen-posts' )
+			);
+			return;
+		}
+
+		printf(
+			'<input class="small-text" type="number" name="%1$s[%2$s]" value="%3$d" min="%4$d" max="%5$d" step="1">',
+			esc_attr( OPTION ),
+			esc_attr( $key ),
+			(int) $value,
+			(int) $args['min'],
+			(int) $args['max']
+		);
+	}
+
+	/** Render one analytics setting with the same bounded controls. */
+	public static function analytics_field( array $args ): void {
+		$key      = (string) $args['key'];
+		$settings = self::get_analytics();
 		$value    = $settings[ $key ] ?? '';
 		if ( 'checkbox' === $args['type'] ) {
 			printf(

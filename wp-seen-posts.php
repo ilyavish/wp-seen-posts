@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
- * Description:       Tracks Seen posts, hides them on later feed visits, and provides anonymous public counters and Top Seen rankings.
- * Version:           1.3.6
+ * Description:       Tracks Seen posts, anonymous public counters, Top Seen rankings, and first-party views/visitors analytics.
+ * Version:           1.4.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,13 +18,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.3.6';
+const VERSION = '1.4.0';
 const OPTION  = 'wp_seen_posts_selectors';
 const HOME_INDEX_TRANSIENT = 'wp_seen_posts_home_index_v1';
 
 require_once __DIR__ . '/includes/class-settings.php';
 require_once __DIR__ . '/includes/class-public-counts.php';
 require_once __DIR__ . '/includes/class-gamification.php';
+require_once __DIR__ . '/includes/class-analytics.php';
 require_once __DIR__ . '/includes/functions.php';
 
 /** Load and register the widget only after WordPress initializes its widget API. */
@@ -512,6 +513,8 @@ function bootstrap(): void {
 	Public_Counts::init();
 	Gamification::maybe_upgrade_schema();
 	Gamification::init();
+	Analytics::maybe_upgrade_schema();
+	Analytics::init();
 	add_shortcode( 'seen_unseen_streak', __NAMESPACE__ . '\\streak_shortcode' );
 	add_shortcode( 'wp_seen_posts_streak', __NAMESPACE__ . '\\streak_shortcode' );
 
@@ -525,11 +528,13 @@ add_action( 'plugins_loaded', __NAMESPACE__ . '\\bootstrap' );
 function activate(): void {
 	Public_Counts::install_schema();
 	Gamification::install_schema();
+	Analytics::install_schema();
 }
 register_activation_hook( __FILE__, __NAMESPACE__ . '\\activate' );
 
 /** Remove the maintenance schedule while the plugin is inactive. */
 function deactivate(): void {
 	Public_Counts::unschedule_cleanup();
+	Analytics::unschedule_cleanup();
 }
 register_deactivation_hook( __FILE__, __NAMESPACE__ . '\\deactivate' );
