@@ -3,6 +3,8 @@
 
 	var config = window.wpSeenPostsConfig || {};
 	var adapters = window.WPSeenPostsAdapters;
+	var publicCounts = window.WPSeenPublicCounts;
+	var gamification = window.WPSeenGamification;
 	if (!adapters || !('IntersectionObserver' in window)) return;
 
 	function safeNumber(value, fallback) {
@@ -10,56 +12,470 @@
 		return Number.isFinite(value) && value > 0 ? value : fallback;
 	}
 
-	function readHistory() {
-		try {
-			var parsed = JSON.parse(window.localStorage.getItem(config.storageKey || 'wp_seen_posts_v1') || '{}');
-			if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') return {};
-			var clean = {};
-			Object.keys(parsed).forEach(function (id) {
-				if (/^[1-9]\d*$/.test(id) && Number.isFinite(Number(parsed[id])) && Number(parsed[id]) > 0) clean[id] = Math.floor(Number(parsed[id]));
-			});
-			return clean;
-		} catch (error) { return {}; }
+	function visibilityThreshold() {
+		return Math.min(1, Math.max(0.05, safeNumber(config.threshold, 0.5)));
 	}
 
-	function prune(history) {
+	function observerThresholds(maximum) {
+		var thresholds = [0];
+		var step = 0.05;
+		for (var value = step; value < maximum; value += step) thresholds.push(Number(value.toFixed(2)));
+		thresholds.push(maximum);
+		return thresholds;
+	}
+
+	function hasEnoughVisibility(entry, threshold) {
+		var cardHeight = Math.max(0, entry.boundingClientRect.height || 0);
+		var visibleHeight = Math.max(0, entry.intersectionRect.height || 0);
+		var availableHeight = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
+		var requiredHeight = Math.min(cardHeight, availableHeight) * threshold;
+		return entry.isIntersecting && visibleHeight >= requiredHeight;
+	}
+
+	function normalizeHistory(parsed) {
+		if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') return {};
 		var cutoff = Math.floor(Date.now() / 1000) - safeNumber(config.retentionDays, 365) * 86400;
 		var max = Math.floor(safeNumber(config.maxEntries, 3000));
-		var entries = Object.keys(history).filter(function (id) { return history[id] >= cutoff; }).map(function (id) { return [id, history[id]]; });
-		entries.sort(function (a, b) { return b[1] - a[1]; });
+		var entries = [];
+		Object.keys(parsed).forEach(function (id) {
+			var timestamp = Number(parsed[id]);
+			if (/^[1-9]\d*$/.test(id) && Number.isFinite(timestamp) && timestamp >= cutoff) entries.push([id, Math.floor(timestamp)]);
+		});
+		if (entries.length > max) {
+			entries.sort(function (a, b) { return b[1] - a[1]; });
+			entries.length = max;
+		}
 		var clean = {};
-		entries.slice(0, max).forEach(function (entry) { clean[entry[0]] = entry[1]; });
+		entries.forEach(function (entry) { clean[entry[0]] = entry[1]; });
 		return clean;
 	}
 
+	function readHistory(preloaded) {
+		try {
+			var parsed = typeof preloaded === 'undefined' ? JSON.parse(window.localStorage.getItem(config.storageKey || 'wp_seen_posts_v1') || '{}') : preloaded;
+			return normalizeHistory(parsed);
+		} catch (error) { return {}; }
+	}
+
+	function mergeHistories(base, additions) {
+		var merged = {};
+		[base, additions].forEach(function (source) {
+			if (!source || Array.isArray(source) || typeof source !== 'object') return;
+			Object.keys(source).forEach(function (id) {
+				var timestamp = Number(source[id]);
+				if (!/^[1-9]\d*$/.test(id) || !Number.isFinite(timestamp)) return;
+				timestamp = Math.floor(timestamp);
+				if (!Object.prototype.hasOwnProperty.call(merged, id) || timestamp > merged[id]) merged[id] = timestamp;
+			});
+		});
+		return merged;
+	}
+
+	function readMilestones() {
+		if (!Array.isArray(config.badges)) return [];
+		return config.badges.map(function (badge) {
+			return {
+				key: badge && typeof badge.key === 'string' ? badge.key : '',
+				type: badge && badge.type === 'streak' ? 'streak' : 'seen_count',
+				threshold: Math.floor(Number(badge && badge.threshold) || 0),
+				label: badge && typeof badge.label === 'string' ? badge.label : '',
+				requirement: badge && typeof badge.requirement === 'string' ? badge.requirement : '',
+				description: badge && typeof badge.description === 'string' ? badge.description : '',
+				lockedDescription: badge && typeof badge.locked_description === 'string' ? badge.locked_description : '',
+				rarity: badge && typeof badge.rarity === 'string' ? badge.rarity : '',
+				alt: badge && typeof badge.alt === 'string' ? badge.alt : '',
+				url: badge && typeof badge.url === 'string' ? badge.url : ''
+			};
+		}).filter(function (badge) {
+			return badge.key && badge.threshold > 0 && badge.label && badge.description && badge.url;
+		});
+	}
+
 	function init() {
+		var earlyHide = window.WPSeenPostsEarlyHide;
+		if (earlyHide) earlyHide.stop();
 		var adapter = adapters.detect(document, config);
-		if (!adapter) return;
+		if (!adapter) {
+			if (earlyHide) earlyHide.release();
+			return;
+		}
 
 		var feed = adapter.feedContainer;
-		var history = prune(readHistory());
+		var storageKey = config.storageKey || 'wp_seen_posts_v1';
+		var requiredVisibility = visibilityThreshold();
+		/* The head bootstrap already parsed storage; reuse it instead of blocking reload with a second parse. */
+		var history = readHistory(earlyHide && earlyHide.history);
+		if (earlyHide) earlyHide.history = null;
 		var historyAtLoad = new Set(Object.keys(history));
+		var historyEntryCount = historyAtLoad.size;
+		var milestones = readMilestones();
+		var reloadPreviewIds = new Set();
+		var reloadPreviewCount = Number(config.reloadPreviewCount);
+		if (!Number.isFinite(reloadPreviewCount) || reloadPreviewCount < 0) reloadPreviewCount = 2;
+		reloadPreviewCount = Math.floor(reloadPreviewCount);
+		var initialPostIds = Array.prototype.map.call(adapter.posts || [], function (card) { return adapters.postId(card); }).filter(Boolean);
+		if (initialPostIds.length && initialPostIds.every(function (id) { return historyAtLoad.has(id); })) {
+			initialPostIds.slice(0, reloadPreviewCount).forEach(function (id) { reloadPreviewIds.add(id); });
+		}
 		var sessionSeen = new Set();
 		var cards = new Map();
 		var timers = new Map();
+		var seenCardCount = 0;
+		var hiddenCardCount = 0;
 		var showSeen = false;
-		var hideSessionSeen = false;
+		var hiddenSessionSeen = new Set();
+		var feedExhausted = config.hasMorePages === false;
+		var infiniteReady = document.documentElement.classList.contains('wp-pfis-active');
 		var writesSincePrune = 0;
+		var historyWriteTimer = null;
+		var historyDirty = false;
+		var pendingHistory = {};
+		var achievementSignature = '';
+		var achievementRaritySignature = '';
+		var achievementsInitialized = false;
+		var milestoneToast = null;
+		var milestoneToastTimer = null;
+		var previewLoadingDelay = safeNumber(config.previewLoadingDelay, 500);
+		var previewLoadingTimer = null;
+		var previewLoadingVisible = false;
+		var unseenPrefetchPageLimit = Math.max(0, Math.min(8, Math.floor(Number(config.unseenPrefetchPageLimit) || 0)));
+		var unseenPrefetchConcurrency = Math.max(1, Math.min(6, Math.floor(Number(config.unseenPrefetchConcurrency) || 6)));
+		var unseenSearchActive = false;
+		var unseenAdvancePending = false;
+		var infiniteControlsObserver = null;
+		var observedInfiniteControls = null;
+		var nativeFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
+		var warmedPageResponses = new Map();
+		var warmedPageAliases = new Map();
+		var restPostIndexUrl = normalizedPageUrl(config.restPostIndexUrl || '');
+		var homePostIndex = Array.isArray(config.homePostIndex) ? config.homePostIndex.map(function (id) {
+			return Number(id) > 0 ? String(Number(id)) : '';
+		}).filter(Boolean) : [];
+		var archiveMaxPages = Math.max(1, Math.floor(Number(config.maxPages) || 1));
+		var homeIndexWarmupStarted = false;
 
-		function writeHistory(forcePrune) {
+		function normalizedPageUrl(value) {
+			if (typeof value !== 'string' || !value) return '';
 			try {
-				writesSincePrune += 1;
+				var url = new URL(value, window.location.href);
+				url.hash = '';
+				return url.origin === window.location.origin && /^https?:$/.test(url.protocol) ? url.href : '';
+			} catch (error) { return ''; }
+		}
+
+		function upcomingPageUrls(startUrl, count) {
+			var normalized = normalizedPageUrl(startUrl);
+			if (!normalized || count < 1) return [];
+			var url = new URL(normalized);
+			var pathMatch = url.pathname.match(/\/page\/(\d+)\/?$/);
+			var queryPage = url.searchParams.get('paged');
+			var firstPage = pathMatch ? Number(pathMatch[1]) : Number(queryPage);
+			if (!Number.isSafeInteger(firstPage) || firstPage < 1) return [];
+			var urls = [];
+			var trailingSlash = pathMatch && /\/$/.test(url.pathname);
+			for (var offset = 0; offset < count; offset += 1) {
+				var candidate = new URL(url.href);
+				var page = firstPage + offset;
+				if (pathMatch) {
+					candidate.pathname = candidate.pathname.replace(/\/page\/\d+\/?$/, '/page/' + page + (trailingSlash ? '/' : ''));
+				} else candidate.searchParams.set('paged', String(page));
+				urls.push(candidate.href);
+			}
+			return urls;
+		}
+
+		function pageNumberFromUrl(value) {
+			var normalized = normalizedPageUrl(value);
+			if (!normalized) return 0;
+			var url = new URL(normalized);
+			var pathMatch = url.pathname.match(/\/page\/(\d+)\/?$/);
+			var page = pathMatch ? Number(pathMatch[1]) : Number(url.searchParams.get('paged'));
+			return Number.isSafeInteger(page) && page > 0 ? page : 0;
+		}
+
+		function archivePageUrl(startUrl, targetPage) {
+			var firstPage = pageNumberFromUrl(startUrl);
+			if (!firstPage || targetPage < firstPage) return '';
+			var urls = upcomingPageUrls(startUrl, targetPage - firstPage + 1);
+			return urls[targetPage - firstPage] || '';
+		}
+
+		function requestUrl(input) {
+			if (typeof input === 'string') return normalizedPageUrl(input);
+			return input && typeof input.url === 'string' ? normalizedPageUrl(input.url) : '';
+		}
+
+		function abortError() {
+			if (typeof DOMException === 'function') return new DOMException('The operation was aborted.', 'AbortError');
+			var error = new Error('The operation was aborted.');
+			error.name = 'AbortError';
+			return error;
+		}
+
+		function waitForWarmedResponse(promise, signal) {
+			if (!signal || typeof signal.addEventListener !== 'function') return promise;
+			if (signal.aborted) return Promise.reject(abortError());
+			return new Promise(function (resolve, reject) {
+				function abort() { reject(abortError()); }
+				signal.addEventListener('abort', abort, { once: true });
+				promise.then(function (response) {
+					signal.removeEventListener('abort', abort);
+					resolve(response);
+				}, function (error) {
+					signal.removeEventListener('abort', abort);
+					reject(error);
+				});
+			});
+		}
+
+		function installWarmedFetchBridge() {
+			if (!nativeFetch) return false;
+			if (window.fetch.wpSeenPostsWarmBridge) return true;
+			// PFIS remains the only code that parses and appends pages. This bridge merely
+			// gives its ordered GET requests HTML that is already downloading or cached.
+			var bridgedFetch = function (input, options) {
+				var method = options && options.method
+					? String(options.method).toUpperCase()
+					: (input && input.method ? String(input.method).toUpperCase() : 'GET');
+				var url = 'GET' === method ? requestUrl(input) : '';
+				var warmed = url ? warmedPageResponses.get(url) : null;
+				if (!warmed) return nativeFetch(input, options);
+				warmedPageResponses.delete(url);
+				var signal = options && options.signal ? options.signal : null;
+				return waitForWarmedResponse(warmed, signal).then(function (response) {
+					return response.clone();
+				}).catch(function (error) {
+					if (signal && signal.aborted) throw error;
+					return nativeFetch(input, options);
+				});
+			};
+			bridgedFetch.wpSeenPostsWarmBridge = true;
+			try { window.fetch = bridgedFetch; } catch (error) { return false; }
+			return window.fetch === bridgedFetch;
+		}
+
+		function validatedArchiveResponse(response) {
+			if (!response || !response.ok || typeof response.clone !== 'function') throw new Error('Unseen-page prefetch failed.');
+			return response;
+		}
+
+		function archiveRequest(url) {
+			return nativeFetch(url, {
+				credentials: 'same-origin',
+				headers: { Accept: 'text/html' }
+			}).then(validatedArchiveResponse);
+		}
+
+		function withTimeout(promise, milliseconds) {
+			return new Promise(function (resolve, reject) {
+				var timer = window.setTimeout(function () { reject(new Error('Post index timed out.')); }, milliseconds);
+				promise.then(function (value) {
+					window.clearTimeout(timer);
+					resolve(value);
+				}, function (error) {
+					window.clearTimeout(timer);
+					reject(error);
+				});
+			});
+		}
+
+		function targetPageFromIndex(indexedIds, baseRecordOffset, currentRecordOffset, firstNextPage, pageSize) {
+			var validationOffset = currentRecordOffset - baseRecordOffset;
+			var renderedIds = indexedIds.slice(validationOffset, validationOffset + initialPostIds.length);
+			if (validationOffset < 0 || renderedIds.length !== initialPostIds.length || renderedIds.some(function (id, index) {
+				return id !== initialPostIds[index];
+			})) throw new Error('Post index did not match the rendered feed.');
+
+			var lastIndexedRecord = baseRecordOffset + indexedIds.length;
+			for (var page = firstNextPage; page <= archiveMaxPages; page += 1) {
+				var pageOffset = (page - 1) * pageSize;
+				if (pageOffset < baseRecordOffset || pageOffset >= lastIndexedRecord) break;
+				var localOffset = pageOffset - baseRecordOffset;
+				var pageIds = indexedIds.slice(localOffset, localOffset + pageSize);
+				if (pageIds.some(function (id) { return !historyAtLoad.has(id); })) return page;
+			}
+
+			var firstUnindexedPage = Math.floor(lastIndexedRecord / pageSize) + 1;
+			return lastIndexedRecord >= archiveMaxPages * pageSize
+				? archiveMaxPages
+				: Math.min(archiveMaxPages, Math.max(firstNextPage, firstUnindexedPage));
+		}
+
+		function warmIndexedHomePage(startUrl) {
+			if (homeIndexWarmupStarted || archiveMaxPages < 2) return false;
+			var firstNextPage = pageNumberFromUrl(startUrl);
+			var pageSize = Math.max(1, initialPostIds.length);
+			if (!firstNextPage || !pageSize) return false;
+
+			var currentPage = firstNextPage - 1;
+			var currentRecordOffset = Math.max(0, (currentPage - 1) * pageSize);
+			if (homePostIndex.length) {
+				try {
+					var embeddedTargetPage = targetPageFromIndex(homePostIndex, 0, currentRecordOffset, firstNextPage, pageSize);
+					var embeddedTargetUrl = archivePageUrl(startUrl, embeddedTargetPage);
+					if (!embeddedTargetUrl || !installWarmedFetchBridge()) return false;
+					homeIndexWarmupStarted = true;
+					var earlyTargetWarm = earlyHide && earlyHide.targetWarm;
+					var canReuseEarlyWarm = earlyTargetWarm
+						&& normalizedPageUrl(earlyTargetWarm.requestedUrl || '') === startUrl
+						&& normalizedPageUrl(earlyTargetWarm.targetUrl || '') === embeddedTargetUrl
+						&& earlyTargetWarm.promise && typeof earlyTargetWarm.promise.then === 'function';
+					var embeddedSelection = canReuseEarlyWarm
+						? Promise.resolve(earlyTargetWarm.promise).then(validatedArchiveResponse).catch(function () { return archiveRequest(embeddedTargetUrl); })
+						: archiveRequest(embeddedTargetUrl);
+					if (earlyHide) earlyHide.targetWarm = null;
+					embeddedSelection = embeddedSelection.then(function (response) {
+						if (embeddedTargetUrl !== startUrl) warmedPageAliases.set(startUrl, embeddedTargetUrl);
+						return response;
+					});
+					warmedPageResponses.set(startUrl, embeddedSelection);
+					embeddedSelection.catch(function () {});
+					return true;
+				} catch (error) {}
+			}
+
+			if (!restPostIndexUrl || !installWarmedFetchBridge()) return false;
+			homeIndexWarmupStarted = true;
+			var firstIndexPage = Math.floor(currentRecordOffset / 100) + 1;
+			var remainingRecords = Math.max(pageSize, archiveMaxPages * pageSize - ((firstIndexPage - 1) * 100));
+			var indexPageCount = Math.max(1, Math.min(3, Math.ceil(remainingRecords / 100)));
+			var pageRequests = new Map();
+
+			function requestArchive(url) {
+				if (!pageRequests.has(url)) pageRequests.set(url, archiveRequest(url));
+				return pageRequests.get(url);
+			}
+
+			var fallbackRequest = requestArchive(startUrl);
+			fallbackRequest.catch(function () {});
+			var predictedPage = Math.max(firstNextPage, Math.floor(historyAtLoad.size / pageSize) + 1);
+			predictedPage = Math.min(archiveMaxPages, predictedPage);
+			var predictedUrl = archivePageUrl(startUrl, predictedPage) || startUrl;
+			requestArchive(predictedUrl).catch(function () {});
+
+			var indexRequests = [];
+			for (var offset = 0; offset < indexPageCount; offset += 1) {
+				var indexUrl = new URL(restPostIndexUrl);
+				indexUrl.searchParams.set('per_page', '100');
+				indexUrl.searchParams.set('page', String(firstIndexPage + offset));
+				indexUrl.searchParams.set('_fields', 'id');
+				indexRequests.push(nativeFetch(indexUrl.href, {
+					credentials: 'same-origin',
+					headers: { Accept: 'application/json' }
+				}).then(function (response) {
+					if (!response || !response.ok || typeof response.json !== 'function') throw new Error('Post index failed.');
+					return response.json();
+				}));
+			}
+
+			var selection = withTimeout(Promise.all(indexRequests), 3500).then(function (chunks) {
+				var indexedIds = [];
+				chunks.forEach(function (rows) {
+					if (!Array.isArray(rows)) throw new Error('Post index was invalid.');
+					rows.forEach(function (row) {
+						if (row && Number(row.id) > 0) indexedIds.push(String(Number(row.id)));
+					});
+				});
+				var baseRecordOffset = (firstIndexPage - 1) * 100;
+				var targetPage = targetPageFromIndex(indexedIds, baseRecordOffset, currentRecordOffset, firstNextPage, pageSize);
+				var targetUrl = archivePageUrl(startUrl, targetPage);
+				if (!targetUrl) throw new Error('The unseen archive page was invalid.');
+				return requestArchive(targetUrl).then(function (response) {
+					if (targetUrl !== startUrl) warmedPageAliases.set(startUrl, targetUrl);
+					return response;
+				});
+			}).catch(function () {
+				return fallbackRequest;
+			});
+
+			warmedPageResponses.set(startUrl, selection);
+			selection.catch(function () {});
+			return true;
+		}
+
+		function warmUpcomingPages(startUrl) {
+			if (!nativeFetch || unseenPrefetchPageLimit < 1 || warmedPageResponses.size) return;
+			startUrl = normalizedPageUrl(startUrl);
+			if (!startUrl) return;
+			if (warmIndexedHomePage(startUrl)) return;
+			var pageSize = Math.max(1, initialPostIds.length);
+			var estimatedPages = Math.max(1, Math.ceil(historyAtLoad.size / pageSize));
+			var urls = upcomingPageUrls(startUrl, Math.min(unseenPrefetchPageLimit, estimatedPages));
+			if (!urls.length || !installWarmedFetchBridge()) return;
+			var tasks = urls.map(function (url) {
+				var resolveTask;
+				var rejectTask;
+				var request = new Promise(function (resolve, reject) {
+					resolveTask = resolve;
+					rejectTask = reject;
+				});
+				warmedPageResponses.set(url, request);
+				request.catch(function () {});
+				return { url: url, resolve: resolveTask, reject: rejectTask };
+			});
+
+			function runNextWarmTask() {
+				var task = tasks.shift();
+				if (!task) return;
+				archiveRequest(task.url).then(function (response) {
+					task.resolve(response);
+				}).catch(function (error) {
+					warmedPageResponses.delete(task.url);
+					task.reject(error);
+				}).then(runNextWarmTask);
+			}
+
+			var workerCount = Math.min(unseenPrefetchConcurrency, tasks.length);
+			for (var worker = 0; worker < workerCount; worker += 1) {
+				runNextWarmTask();
+			}
+		}
+
+		function flushHistory(forcePrune) {
+			if (historyWriteTimer) window.clearTimeout(historyWriteTimer);
+			historyWriteTimer = null;
+			if (!forcePrune && !historyDirty) return;
+			var previousCount = historyEntryCount;
+			var wroteHistory = false;
+			try {
+				/* Merge only this tab's pending additions into the latest stored value. This
+				 * preserves posts recorded by other tabs without resurrecting a reset. */
+				history = mergeHistories(readHistory(), pendingHistory);
 				if (forcePrune || writesSincePrune >= 25) {
-					history = prune(history);
+					history = normalizeHistory(history);
 					writesSincePrune = 0;
 				}
-				window.localStorage.setItem(config.storageKey || 'wp_seen_posts_v1', JSON.stringify(history));
+				historyEntryCount = Object.keys(history).length;
+				window.localStorage.setItem(storageKey, JSON.stringify(history));
+				pendingHistory = {};
+				wroteHistory = true;
 			} catch (error) {}
+			historyDirty = !wroteHistory && Object.keys(pendingHistory).length > 0;
+			if (previousCount !== historyEntryCount) updateUi();
 		}
-		writeHistory(true);
+
+		function syncHistoryFromStorage(storedValue) {
+			var previousCount = historyEntryCount;
+			var storedHistory;
+			if (typeof storedValue === 'string' || storedValue === null) {
+				try { storedHistory = normalizeHistory(JSON.parse(storedValue || '{}')); }
+				catch (error) { storedHistory = {}; }
+			} else storedHistory = readHistory();
+			history = mergeHistories(storedHistory, pendingHistory);
+			historyEntryCount = Object.keys(history).length;
+			if (previousCount !== historyEntryCount) updateUi();
+		}
+
+		function scheduleHistoryWrite() {
+			historyDirty = true;
+			writesSincePrune += 1;
+			if (!historyWriteTimer) historyWriteTimer = window.setTimeout(function () { flushHistory(false); }, 0);
+		}
 
 		var controls = document.createElement('div');
 		controls.className = 'wp-seen-posts-controls';
+		var actions = document.createElement('div');
+		actions.className = 'wp-seen-posts-actions';
 		var toggle = document.createElement('button');
 		toggle.type = 'button';
 		toggle.className = 'wp-seen-posts-toggle';
@@ -67,95 +483,411 @@
 		reset.type = 'button';
 		reset.className = 'wp-seen-posts-reset';
 		reset.textContent = config.i18n.reset;
-		controls.appendChild(toggle);
-		controls.appendChild(reset);
+		var achievements = document.createElement('div');
+		achievements.className = 'wp-seen-posts-achievements';
+		achievements.hidden = true;
+		achievements.setAttribute('role', 'region');
+		achievements.setAttribute('aria-label', config.i18n.achievements || 'Seen achievements');
+		var achievementsTitle = document.createElement('span');
+		achievementsTitle.className = 'wp-seen-posts-achievements-title';
+		achievementsTitle.textContent = config.i18n.achievements || 'Your badges';
+		var achievementsList = document.createElement('span');
+		achievementsList.className = 'wp-seen-posts-achievements-list';
+		achievementsList.setAttribute('role', 'list');
+		var achievementsHint = document.createElement('span');
+		achievementsHint.className = 'wp-seen-posts-achievements-hint';
+		achievementsHint.textContent = config.i18n.badgeHint || 'Tap a badge to see how it unlocks.';
+		actions.appendChild(toggle);
+		actions.appendChild(reset);
+		controls.appendChild(actions);
+		achievements.appendChild(achievementsTitle);
+		achievements.appendChild(achievementsList);
+		achievements.appendChild(achievementsHint);
+		controls.appendChild(achievements);
 		feed.insertAdjacentElement('beforebegin', controls);
+		if (gamification && typeof gamification.mount === 'function') gamification.mount(actions);
 
-		var empty = document.createElement('div');
+		var empty = document.createElement('p');
 		empty.className = 'wp-seen-posts-empty';
 		empty.hidden = true;
-		var emptyTitle = document.createElement('strong');
-		emptyTitle.textContent = config.i18n.caughtUp;
-		var emptyDetail = document.createElement('span');
-		emptyDetail.textContent = config.i18n.caughtUpDetail;
-		var emptyShow = document.createElement('button');
-		emptyShow.type = 'button';
-		emptyShow.textContent = config.i18n.showSeenPosts;
-		empty.appendChild(emptyTitle);
-		empty.appendChild(emptyDetail);
-		empty.appendChild(emptyShow);
+		empty.setAttribute('role', 'status');
+		empty.setAttribute('aria-live', 'polite');
+		empty.textContent = config.i18n.caughtUp;
 		feed.insertAdjacentElement('beforebegin', empty);
-
-		function seenCount() {
-			var count = 0;
-			cards.forEach(function (card) { if (card.classList.contains('wp-seen-posts-is-seen')) count += 1; });
-			return count;
-		}
 
 		function shouldHide(id) {
 			if (showSeen) return false;
-			return historyAtLoad.has(id) || (hideSessionSeen && sessionSeen.has(id));
+			if (reloadPreviewIds.has(id)) return false;
+			return historyAtLoad.has(id) || hiddenSessionSeen.has(id);
 		}
 
 		function applyCardVisibility(card, id) {
 			var hidden = card.classList.contains('wp-seen-posts-is-seen') && shouldHide(id);
+			var wasHidden = card.classList.contains('wp-seen-posts-is-hidden');
+			if (hidden !== wasHidden) hiddenCardCount += hidden ? 1 : -1;
 			card.classList.toggle('wp-seen-posts-is-hidden', hidden);
 			card.setAttribute('aria-hidden', hidden ? 'true' : 'false');
 		}
 
-		function updateUi() {
-			var count = seenCount();
-			toggle.textContent = showSeen ? config.i18n.hideSeen : config.i18n.showSeen + ' (' + count + ')';
-			toggle.disabled = count === 0;
-			reset.hidden = Object.keys(history).length === 0;
-			var visible = 0;
-			cards.forEach(function (card) { if (!card.classList.contains('wp-seen-posts-is-hidden')) visible += 1; });
-			empty.hidden = !(cards.size > 0 && visible === 0 && count === cards.size);
+		function createMilestoneImage(milestone, className, size) {
+			var image = document.createElement('img');
+			image.className = className;
+			image.src = milestone.url;
+			image.alt = milestone.alt || milestone.label;
+			image.width = size;
+			image.height = size;
+			image.decoding = className === 'wp-seen-posts-achievement-image' ? 'sync' : 'async';
+			return image;
 		}
 
-		function setSeen(card, id, fromHistory) {
+		function closeAchievementExplanations(except) {
+			achievementsList.querySelectorAll('.wp-seen-posts-achievement.is-explaining').forEach(function (item) {
+				if (item === except) return;
+				item.classList.remove('is-explaining');
+				var button = item.querySelector('.wp-seen-posts-achievement-button');
+				if (button) {
+					button.setAttribute('aria-expanded', 'false');
+					if (document.activeElement === button) button.blur();
+				}
+			});
+		}
+
+		function lockedAchievementDescription(milestone) {
+			if (milestone.lockedDescription) return milestone.lockedDescription;
+			return (config.i18n.badgeLocked || 'Locked. See %1$d posts to unlock %2$s.')
+				.replace('%1$d', String(milestone.threshold))
+				.replace('%2$s', milestone.label);
+		}
+
+		function createAchievementItem(milestone, animate, earned) {
+			var item = document.createElement('span');
+			item.className = 'wp-seen-posts-achievement wp-seen-posts-achievement-' + (earned ? 'earned' : 'locked') + (animate ? ' wp-seen-posts-achievement-unlocked' : '');
+			item.dataset.badgeKey = milestone.key;
+			item.dataset.badgeState = earned ? 'earned' : 'locked';
+			item.setAttribute('role', 'listitem');
+			var button = document.createElement('button');
+			button.type = 'button';
+			button.className = 'wp-seen-posts-achievement-button';
+			var description = earned ? milestone.description : lockedAchievementDescription(milestone);
+			var ariaDescription = description + (milestone.rarity ? '. ' + milestone.rarity : '');
+			button.setAttribute('aria-label', ariaDescription);
+			button.setAttribute('aria-expanded', 'false');
+			var tooltip = document.createElement('span');
+			tooltip.className = 'wp-seen-posts-achievement-tooltip';
+			tooltip.id = 'wp-seen-posts-tooltip-' + milestone.key;
+			tooltip.setAttribute('role', 'tooltip');
+			var tooltipName = document.createElement('strong');
+			tooltipName.className = 'wp-seen-posts-achievement-tooltip-name';
+			tooltipName.textContent = milestone.label;
+			var tooltipRequirement = document.createElement('span');
+			tooltipRequirement.className = 'wp-seen-posts-achievement-tooltip-requirement';
+			tooltipRequirement.textContent = earned ? (milestone.requirement || description) : description;
+			tooltip.appendChild(tooltipName);
+			tooltip.appendChild(tooltipRequirement);
+			if (earned && milestone.requirement && milestone.description !== milestone.requirement) {
+				var tooltipDescription = document.createElement('span');
+				tooltipDescription.className = 'wp-seen-posts-achievement-tooltip-description';
+				tooltipDescription.textContent = milestone.description;
+				tooltip.appendChild(tooltipDescription);
+			}
+			if (milestone.rarity) {
+				var tooltipRarity = document.createElement('span');
+				tooltipRarity.className = 'wp-seen-posts-achievement-rarity';
+				tooltipRarity.textContent = milestone.rarity;
+				tooltip.appendChild(tooltipRarity);
+			}
+			button.setAttribute('aria-describedby', tooltip.id);
+			button.appendChild(createMilestoneImage(milestone, 'wp-seen-posts-achievement-image', 36));
+			button.addEventListener('click', function (event) {
+				event.stopPropagation();
+				var open = !item.classList.contains('is-explaining');
+				closeAchievementExplanations(open ? item : null);
+				item.classList.toggle('is-explaining', open);
+				button.setAttribute('aria-expanded', open ? 'true' : 'false');
+			});
+			item.appendChild(button);
+			item.appendChild(tooltip);
+			return item;
+		}
+
+		function isMilestoneEarned(milestone) {
+			if (milestone.type === 'streak') {
+				return Boolean(gamification && typeof gamification.isBadgeEarned === 'function' && gamification.isBadgeEarned(milestone.key));
+			}
+			return historyEntryCount >= milestone.threshold;
+		}
+
+		function showMilestoneToast(milestone) {
+			if (!document.body) return;
+			if (milestoneToastTimer) window.clearTimeout(milestoneToastTimer);
+			if (milestoneToast) milestoneToast.remove();
+			milestoneToast = document.createElement('div');
+			milestoneToast.className = 'wp-seen-posts-unlock-toast';
+			milestoneToast.setAttribute('role', 'status');
+			milestoneToast.setAttribute('aria-live', 'polite');
+			milestoneToast.appendChild(createMilestoneImage(milestone, 'wp-seen-posts-unlock-image', 48));
+			var copy = document.createElement('span');
+			var heading = document.createElement('strong');
+			heading.textContent = config.i18n.achievementUnlocked || 'Achievement unlocked!';
+			copy.appendChild(heading);
+			copy.appendChild(document.createTextNode(' ' + milestone.description));
+			milestoneToast.appendChild(copy);
+			document.body.appendChild(milestoneToast);
+			window.setTimeout(function () {
+				if (milestoneToast) milestoneToast.classList.add('is-visible');
+			}, 0);
+			milestoneToastTimer = window.setTimeout(function () {
+				if (!milestoneToast) return;
+				milestoneToast.classList.remove('is-visible');
+				var oldToast = milestoneToast;
+				milestoneToastTimer = window.setTimeout(function () { oldToast.remove(); }, 180);
+				milestoneToast = null;
+			}, 2400);
+		}
+
+		function updateAchievements() {
+			var earned = milestones.filter(isMilestoneEarned);
+			var signature = earned.map(function (milestone) { return milestone.key; }).join(',');
+			var raritySignature = milestones.map(function (milestone) { return milestone.key + ':' + milestone.rarity; }).join(',');
+			var previousKeys = achievementSignature ? achievementSignature.split(',') : [];
+			var newlyEarned = achievementsInitialized ? earned.filter(function (milestone) {
+				return previousKeys.indexOf(milestone.key) === -1;
+			}) : [];
+			if (!achievementsInitialized || signature !== achievementSignature || raritySignature !== achievementRaritySignature) {
+				achievementSignature = signature;
+				achievementRaritySignature = raritySignature;
+				while (achievementsList.firstChild) achievementsList.removeChild(achievementsList.firstChild);
+				milestones.forEach(function (milestone) {
+					var isEarned = isMilestoneEarned(milestone);
+					achievementsList.appendChild(createAchievementItem(milestone, isEarned && newlyEarned.indexOf(milestone) !== -1, isEarned));
+				});
+				achievements.hidden = milestones.length === 0;
+			}
+			achievementsInitialized = true;
+			if (newlyEarned.length) showMilestoneToast(newlyEarned[newlyEarned.length - 1]);
+		}
+		document.addEventListener('click', function () { closeAchievementExplanations(null); });
+		document.addEventListener('wpSeenPostsRaritiesUpdated', function (event) {
+			var rarities = event.detail && event.detail.rarities;
+			if (!rarities || typeof rarities !== 'object') return;
+			milestones.forEach(function (milestone) {
+				if (typeof rarities[milestone.key] === 'string') milestone.rarity = rarities[milestone.key];
+			});
+			updateAchievements();
+		});
+
+		function updatePreviewLoading(waiting) {
+			if (!waiting) {
+				if (previewLoadingTimer) window.clearTimeout(previewLoadingTimer);
+				previewLoadingTimer = null;
+				previewLoadingVisible = false;
+				return;
+			}
+			if (previewLoadingVisible || previewLoadingTimer) return;
+			previewLoadingTimer = window.setTimeout(function () {
+				previewLoadingTimer = null;
+				previewLoadingVisible = true;
+				updateUi();
+			}, previewLoadingDelay);
+		}
+
+		function hasStableVisibleCard() {
+			var found = false;
+			cards.forEach(function (card, id) {
+				if (!reloadPreviewIds.has(id) && !card.classList.contains('wp-seen-posts-is-hidden')) found = true;
+			});
+			return found;
+		}
+
+		function setUnseenSearchActive(value) {
+			value = Boolean(value);
+			unseenSearchActive = value;
+			document.documentElement.classList.toggle('wp-seen-posts-searching-unseen', value);
+			var infiniteControls = document.querySelector('.wp-pfis-controls');
+			if (infiniteControls) {
+				if (value) infiniteControls.setAttribute('aria-busy', 'true');
+				else infiniteControls.removeAttribute('aria-busy');
+			}
+			updateUi();
+		}
+
+		function updateUi() {
+			updateAchievements();
+			var count = seenCardCount;
+			toggle.textContent = showSeen ? config.i18n.hideSeen : config.i18n.showSeen + ' (' + count + ')';
+			toggle.setAttribute('aria-expanded', showSeen ? 'true' : 'false');
+			toggle.disabled = count === 0;
+			reset.hidden = historyEntryCount === 0;
+			var visible = cards.size - hiddenCardCount;
+			var allHidden = !showSeen && cards.size > 0 && visible === 0 && count === cards.size;
+			var canStillAdvance = !feedExhausted && (infiniteReady || document.readyState !== 'complete');
+			var previewOnly = !showSeen && reloadPreviewIds.size > 0 && count === cards.size;
+			var waitingWithPreview = unseenSearchActive && previewOnly && canStillAdvance;
+			updatePreviewLoading(waitingWithPreview);
+			var findingUnseen = unseenSearchActive && canStillAdvance && !hasStableVisibleCard() && (!previewOnly || previewLoadingVisible);
+			empty.textContent = findingUnseen
+				? (config.i18n.findingUnseen || 'Finding unseen posts…')
+				: (canStillAdvance ? config.i18n.loadingUnseen : (feedExhausted ? config.i18n.caughtUp : config.i18n.noUnseenPage));
+			empty.classList.toggle('wp-seen-posts-empty-loading', (allHidden && canStillAdvance) || findingUnseen);
+			empty.classList.toggle('wp-seen-posts-empty-preview-loading', waitingWithPreview && previewLoadingVisible);
+			empty.classList.toggle('wp-seen-posts-empty-searching', findingUnseen);
+			empty.hidden = !(allHidden || findingUnseen || (previewOnly && !canStillAdvance));
+		}
+
+		function observeInfiniteControls(infiniteControls) {
+			if (observedInfiniteControls === infiniteControls) return;
+			if (infiniteControlsObserver) infiniteControlsObserver.disconnect();
+			observedInfiniteControls = infiniteControls;
+			if (!infiniteControls || typeof window.MutationObserver !== 'function') return;
+			infiniteControlsObserver = new window.MutationObserver(function () {
+				if (unseenSearchActive) window.setTimeout(continueFeedIfNeeded, 0);
+			});
+			infiniteControlsObserver.observe(infiniteControls, {
+				attributes: true,
+				attributeFilter: ['aria-disabled', 'href', 'class'],
+				childList: true,
+				subtree: true
+			});
+		}
+
+		function refreshFeedExhaustion() {
+			var infiniteControls = document.querySelector('.wp-pfis-controls');
+			observeInfiniteControls(infiniteControls);
+			if (infiniteControls) {
+				infiniteReady = true;
+				feedExhausted = !infiniteControls.querySelector('.wp-pfis-load-more') && !infiniteControls.querySelector('.wp-pfis-sentinel');
+			}
+			if (feedExhausted) setUnseenSearchActive(false);
+			updateUi();
+		}
+
+		function requestMoreIfAllHidden() {
+			if (feedExhausted || showSeen || !cards.size) {
+				setUnseenSearchActive(false);
+				return;
+			}
+			if (hasStableVisibleCard()) {
+				setUnseenSearchActive(false);
+				return;
+			}
+			if (document.querySelector('.wp-pfis-pagination-fallback.is-prominent')) {
+				unseenAdvancePending = false;
+				setUnseenSearchActive(false);
+				return;
+			}
+
+			setUnseenSearchActive(true);
+			if (unseenAdvancePending) return;
+			var loadMore = document.querySelector('.wp-pfis-load-more:not([aria-disabled="true"]):not(:disabled)');
+			if (loadMore) {
+				warmUpcomingPages(loadMore.href || loadMore.getAttribute('href') || '');
+				unseenAdvancePending = true;
+				loadMore.click();
+			}
+		}
+
+		function continueFeedIfNeeded() {
+			refreshFeedExhaustion();
+			requestMoreIfAllHidden();
+		}
+
+		function applyWarmedPageAlias(detail) {
+			var requestedUrl = detail ? normalizedPageUrl(detail.sourceUrl || '') : '';
+			var actualUrl = requestedUrl ? warmedPageAliases.get(requestedUrl) : '';
+			if (!actualUrl) return;
+			warmedPageAliases.delete(requestedUrl);
+			var sourcePage = String(pageNumberFromUrl(actualUrl) || '');
+			Array.prototype.forEach.call(detail.posts || [], function (post) {
+				post.dataset.sourceUrl = actualUrl;
+				if (sourcePage) post.dataset.sourcePage = sourcePage;
+			});
+			var boundaries = feed.querySelectorAll('.wp-pfis-page-boundary');
+			for (var index = boundaries.length - 1; index >= 0; index -= 1) {
+				if (normalizedPageUrl(boundaries[index].dataset.sourceUrl || '') !== requestedUrl) continue;
+				boundaries[index].dataset.sourceUrl = actualUrl;
+				if (sourcePage) boundaries[index].dataset.sourcePage = sourcePage;
+				break;
+			}
+			detail.sourceUrl = actualUrl;
+		}
+
+		function ensureCardStatus(card) {
+			var statusGroup = card.querySelector(':scope > .wp-seen-posts-card-status');
+			if (!statusGroup) {
+				statusGroup = document.createElement('div');
+				statusGroup.className = 'wp-seen-posts-card-status';
+				card.insertAdjacentElement('afterbegin', statusGroup);
+			}
+			card.classList.add('wp-seen-posts-position-context');
+			return statusGroup;
+		}
+
+		function placePublicCounter(card) {
+			var counter = card.querySelector('.wp-seen-posts-public-count-wrap');
+			if (!counter) return;
+			var statusGroup = ensureCardStatus(card);
+			if (counter.parentElement !== statusGroup) statusGroup.insertBefore(counter, statusGroup.firstChild);
+		}
+
+		function setSeen(card, id, fromHistory, deferUi) {
+			var wasNew = false;
+			if (card.dataset.seenPostState !== 'seen') seenCardCount += 1;
 			card.classList.add('wp-seen-posts-is-seen');
 			card.dataset.seenPostState = 'seen';
-			if (!card.querySelector(':scope > .wp-seen-posts-badge')) {
-				var badge = document.createElement('span');
-				badge.className = 'wp-seen-posts-badge';
-				badge.textContent = config.i18n.seen;
-				card.insertAdjacentElement('afterbegin', badge);
-			}
+			placePublicCounter(card);
+			if (publicCounts && typeof publicCounts.setPersonalState === 'function') publicCounts.setPersonalState(card, true);
 			if (!fromHistory) {
-				history[id] = Math.floor(Date.now() / 1000);
+				if (!Object.prototype.hasOwnProperty.call(history, id)) {
+					historyEntryCount += 1;
+					wasNew = true;
+				}
+				var seenAt = Math.floor(Date.now() / 1000);
+				history[id] = seenAt;
+				pendingHistory[id] = seenAt;
 				sessionSeen.add(id);
-				writeHistory(false);
+				scheduleHistoryWrite();
 			}
+			/* Existing browser history is never backfilled. Only the same new local
+			 * transition that marks this card Seen may enter the public batch. */
+			if (wasNew) {
+				var qualifies = true;
+				if (publicCounts && typeof publicCounts.queue === 'function') qualifies = publicCounts.queue(id) !== false;
+				if (qualifies && gamification && typeof gamification.recordSeen === 'function') {
+					gamification.recordSeen(id, historyEntryCount);
+				}
+			}
+			card.classList.toggle('wp-seen-posts-reload-preview', reloadPreviewIds.has(id));
 			observer.unobserve(card);
 			applyCardVisibility(card, id);
-			updateUi();
+			if (!deferUi) updateUi();
 		}
 
 		var observer = new IntersectionObserver(function (entries) {
 			entries.forEach(function (entry) {
 				var card = entry.target;
 				var id = card.dataset.seenPostId;
-				if (entry.isIntersecting && entry.intersectionRatio >= safeNumber(config.threshold, 0.6) && document.visibilityState === 'visible') {
+				if (hasEnoughVisibility(entry, requiredVisibility) && document.visibilityState === 'visible') {
 					if (!timers.has(card)) {
 						timers.set(card, window.setTimeout(function () {
 							timers.delete(card);
 							if (document.visibilityState === 'visible' && card.dataset.seenPostState === 'unseen') setSeen(card, id, false);
-						}, safeNumber(config.dwellTime, 1500)));
+						}, safeNumber(config.dwellTime, 1000)));
 					}
 				} else if (timers.has(card)) {
 					window.clearTimeout(timers.get(card));
 					timers.delete(card);
 				}
 			});
-		}, { threshold: [safeNumber(config.threshold, 0.6)] });
+		}, { threshold: observerThresholds(requiredVisibility) });
 
 		document.addEventListener('visibilitychange', function () {
 			if (document.visibilityState !== 'visible') {
+				flushHistory(false);
 				timers.forEach(function (timer) { window.clearTimeout(timer); });
 				timers.clear();
 				return;
 			}
+			syncHistoryFromStorage();
 			/* Re-observe eligible cards so a dwell period can restart after returning to the tab. */
 			cards.forEach(function (card) {
 				if (card.dataset.seenPostState === 'unseen') {
@@ -164,6 +896,11 @@
 				}
 			});
 		});
+		window.addEventListener('storage', function (event) {
+			if (event.key !== storageKey && event.key !== null) return;
+			syncHistoryFromStorage(event.newValue);
+		});
+		window.addEventListener('pagehide', function () { flushHistory(false); });
 
 		function initializePosts(posts) {
 			Array.prototype.forEach.call(posts || [], function (card) {
@@ -173,9 +910,15 @@
 				card.dataset.seenPostInitialized = 'true';
 				card.dataset.seenPostId = id;
 				cards.set(id, card);
-				if (historyAtLoad.has(id)) setSeen(card, id, true);
+				/* Some P2 Read More renderers replace filtered content after WordPress
+				 * appended the server counter. Restore only genuinely missing markup. */
+				if (publicCounts && typeof publicCounts.ensure === 'function') publicCounts.ensure(card, id);
+				if (publicCounts && typeof publicCounts.register === 'function') publicCounts.register(card);
+				if (historyAtLoad.has(id)) setSeen(card, id, true, true);
 				else {
+					placePublicCounter(card);
 					card.dataset.seenPostState = 'unseen';
+					if (publicCounts && typeof publicCounts.setPersonalState === 'function') publicCounts.setPersonalState(card, false);
 					observer.observe(card);
 				}
 			});
@@ -184,27 +927,51 @@
 
 		function setShowSeen(value) {
 			showSeen = value;
-			if (!value) hideSessionSeen = true;
-			cards.forEach(function (card, id) { applyCardVisibility(card, id); });
+			if (value) setUnseenSearchActive(false);
+			if (!value) {
+				/* Hide only the session posts that are already Seen at this tap. New
+				 * posts loaded afterward must remain stable until another Hide tap. */
+				sessionSeen.forEach(function (id) { hiddenSessionSeen.add(id); });
+				reloadPreviewIds.clear();
+			}
+			cards.forEach(function (card, id) {
+				card.classList.toggle('wp-seen-posts-reload-preview', reloadPreviewIds.has(id));
+				applyCardVisibility(card, id);
+			});
 			updateUi();
+			if (!value) window.setTimeout(requestMoreIfAllHidden, 0);
 		}
 
 		toggle.addEventListener('click', function () { setShowSeen(!showSeen); });
-		emptyShow.addEventListener('click', function () { setShowSeen(true); });
 		reset.addEventListener('click', function () {
 			if (!window.confirm(config.i18n.confirmReset)) return;
-			try { window.localStorage.removeItem(config.storageKey || 'wp_seen_posts_v1'); } catch (error) {}
+			if (publicCounts && typeof publicCounts.preserveHistoryBeforeReset === 'function') {
+				publicCounts.preserveHistoryBeforeReset();
+			}
+			if (historyWriteTimer) window.clearTimeout(historyWriteTimer);
+			historyWriteTimer = null;
+			historyDirty = false;
+			try { window.localStorage.removeItem(storageKey); } catch (error) {}
 			history = {};
+			pendingHistory = {};
+			historyEntryCount = 0;
 			historyAtLoad.clear();
 			sessionSeen.clear();
+			hiddenSessionSeen.clear();
+			reloadPreviewIds.clear();
+			seenCardCount = 0;
+			hiddenCardCount = 0;
 			showSeen = false;
-			hideSessionSeen = false;
+			setUnseenSearchActive(false);
 			cards.forEach(function (card) {
-				card.classList.remove('wp-seen-posts-is-seen', 'wp-seen-posts-is-hidden');
+				card.classList.remove('wp-seen-posts-is-seen', 'wp-seen-posts-is-hidden', 'wp-seen-posts-reload-preview');
 				card.removeAttribute('aria-hidden');
 				card.dataset.seenPostState = 'unseen';
-				var badge = card.querySelector(':scope > .wp-seen-posts-badge');
-				if (badge) badge.remove();
+				if (publicCounts && typeof publicCounts.setPersonalState === 'function') publicCounts.setPersonalState(card, false);
+				var statusGroup = card.querySelector('.wp-seen-posts-card-status');
+				if (statusGroup && !statusGroup.querySelector('.wp-seen-posts-public-count-wrap')) statusGroup.remove();
+				if (card.querySelector(':scope > .wp-seen-posts-card-status')) card.classList.add('wp-seen-posts-position-context');
+				else card.classList.remove('wp-seen-posts-position-context');
 				observer.observe(card);
 			});
 			updateUi();
@@ -212,19 +979,34 @@
 
 		document.addEventListener('wpFeedPostsAdded', function (event) {
 			if (!event.detail || event.detail.container !== feed || !event.detail.posts) return;
+			unseenAdvancePending = false;
+			applyWarmedPageAlias(event.detail);
 			initializePosts(event.detail.posts);
-			/* Use the companion plugin's own control to cross an all-hidden page. */
-			var added = Array.prototype.filter.call(event.detail.posts, function (post) { return post && post.dataset.seenPostInitialized === 'true'; });
-			if (added.length && added.every(function (post) { return post.classList.contains('wp-seen-posts-is-hidden'); })) {
-				var loadMore = document.querySelector('.wp-pfis-load-more:not([aria-disabled="true"])');
-				if (loadMore) window.setTimeout(function () { loadMore.click(); }, 0);
-			}
+			/* Wait until the companion loader finishes updating its controls, then skip an all-Seen page. */
+			window.setTimeout(continueFeedIfNeeded, 0);
 		});
 
+		document.addEventListener('wpFeedInfiniteScrollReady', function (event) {
+			if (event.detail && event.detail.container && event.detail.container !== feed) return;
+			infiniteReady = true;
+			continueFeedIfNeeded();
+		});
+
+		document.addEventListener('wpFeedInfiniteScrollFinished', function (event) {
+			if (event.detail && event.detail.container && event.detail.container !== feed) return;
+			unseenAdvancePending = false;
+			feedExhausted = true;
+			setUnseenSearchActive(false);
+			updateUi();
+		});
+		window.addEventListener('load', function () { if (!infiniteReady) updateUi(); }, { once: true });
+
 		initializePosts(adapter.posts);
+		if (earlyHide) earlyHide.release();
 		document.documentElement.classList.add('wp-seen-posts-active');
+		window.setTimeout(continueFeedIfNeeded, 0);
 	}
 
-	if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
+	if (document.readyState === 'loading' && !document.body) document.addEventListener('DOMContentLoaded', init, { once: true });
 	else init();
 }());

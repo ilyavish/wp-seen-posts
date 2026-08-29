@@ -1,0 +1,119 @@
+.wp-seen-analytics {
+	--wp-seen-ink: #172033;
+	--wp-seen-muted: #5f6b7a;
+	--wp-seen-line: #dcdcde;
+	--wp-seen-accent: #d63638;
+	--wp-seen-soft: #fff7f4;
+	max-width: 1280px;
+}
+
+.wp-seen-analytics__header {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 24px;
+	margin: 18px 0 22px;
+}
+
+.wp-seen-analytics__header h1 { color: var(--wp-seen-ink); margin-bottom: 6px; }
+.wp-seen-analytics__header p { color: var(--wp-seen-muted); font-size: 14px; margin: 0; }
+
+.wp-seen-analytics__ranges {
+	display: inline-flex;
+	flex: 0 0 auto;
+	gap: 4px;
+	padding: 4px;
+	border: 1px solid var(--wp-seen-line);
+	border-radius: 10px;
+	background: #fff;
+}
+
+.wp-seen-analytics__ranges a {
+	padding: 8px 12px;
+	border-radius: 7px;
+	color: #2c3338;
+	text-decoration: none;
+}
+
+.wp-seen-analytics__ranges a:hover,
+.wp-seen-analytics__ranges a:focus-visible { color: var(--wp-seen-accent); }
+.wp-seen-analytics__ranges a.is-current { background: var(--wp-seen-ink); color: #fff; }
+
+.wp-seen-analytics__metrics {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 14px;
+	margin-bottom: 18px;
+}
+
+.wp-seen-analytics__metric,
+.wp-seen-analytics__panel {
+	box-sizing: border-box;
+	border: 1px solid var(--wp-seen-line);
+	border-radius: 12px;
+	background: #fff;
+	box-shadow: 0 1px 2px rgba(23, 32, 51, .05);
+}
+
+.wp-seen-analytics__metric { min-height: 132px; padding: 18px; }
+.wp-seen-analytics__metric span,
+.wp-seen-analytics__metric small { display: block; color: var(--wp-seen-muted); }
+.wp-seen-analytics__metric strong { display: block; margin: 9px 0 6px; color: var(--wp-seen-ink); font-size: 30px; line-height: 1; }
+
+.wp-seen-analytics__panel { margin-bottom: 18px; padding: 20px; }
+.wp-seen-analytics__panel h2 { margin: 0 0 18px; color: var(--wp-seen-ink); font-size: 17px; }
+
+.wp-seen-analytics__chart { display: grid; gap: 8px; }
+.wp-seen-analytics__bar-row {
+	display: grid;
+	grid-template-columns: 54px minmax(90px, 1fr) 62px 92px;
+	align-items: center;
+	gap: 10px;
+	min-height: 24px;
+}
+.wp-seen-analytics__bar-row time,
+.wp-seen-analytics__bar-row small { color: var(--wp-seen-muted); }
+.wp-seen-analytics__bar-row strong { text-align: right; color: var(--wp-seen-ink); }
+.wp-seen-analytics__bar-track { height: 10px; overflow: hidden; border-radius: 999px; background: #f0f0f1; }
+.wp-seen-analytics__bar-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ff8a65, var(--wp-seen-accent)); }
+
+.wp-seen-analytics__columns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 18px; }
+.wp-seen-analytics__table-wrap { overflow-x: auto; }
+.wp-seen-analytics table th:nth-last-child(-n+2),
+.wp-seen-analytics table td:nth-last-child(-n+2) { text-align: right; }
+
+.wp-seen-analytics__types { display: grid; gap: 0; margin: 0; }
+.wp-seen-analytics__types li {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 2px 14px;
+	margin: 0;
+	padding: 12px 0;
+	border-top: 1px solid #f0f0f1;
+}
+.wp-seen-analytics__types li:first-child { border-top: 0; padding-top: 0; }
+.wp-seen-analytics__types strong { color: var(--wp-seen-ink); font-size: 17px; }
+.wp-seen-analytics__types small { grid-column: 1 / -1; color: var(--wp-seen-muted); }
+
+.wp-seen-analytics__privacy {
+	margin: 6px 0 28px;
+	padding: 14px 16px;
+	border-left: 4px solid var(--wp-seen-accent);
+	background: var(--wp-seen-soft);
+	color: #4b5563;
+}
+
+@media (max-width: 960px) {
+	.wp-seen-analytics__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.wp-seen-analytics__columns { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+	.wp-seen-analytics__header { align-items: stretch; flex-direction: column; }
+	.wp-seen-analytics__ranges { align-self: flex-start; overflow-x: auto; max-width: 100%; }
+	.wp-seen-analytics__metrics { grid-template-columns: 1fr; }
+	.wp-seen-analytics__metric { min-height: 0; }
+	.wp-seen-analytics__bar-row { grid-template-columns: 48px minmax(70px, 1fr) 48px; }
+	.wp-seen-analytics__bar-row small { grid-column: 2 / -1; }
+	.wp-seen-analytics__panel { padding: 15px; }
+}

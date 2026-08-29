@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Seen Posts gamification layout fixture</title>
+	<link rel="stylesheet" href="../../assets/css/seen-posts.css">
+	<style>
+		body { background: #eee; color: #3c434a; font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; }
+		main { background: #fff; box-sizing: border-box; margin: 24px auto; max-width: 1180px; min-height: 580px; padding: 24px; width: calc(100% - 24px); }
+	</style>
+</head>
+<body>
+	<main>
+		<div class="wp-seen-posts-controls">
+			<div class="wp-seen-posts-actions">
+				<button class="wp-seen-posts-toggle" type="button">Show seen (57)</button>
+				<button class="wp-seen-posts-reset" type="button">Reset seen history</button>
+				<span class="wp-seen-posts-streak">🔥 2 / 3 posts to keep your streak</span>
+			</div>
+			<div class="wp-seen-posts-achievements" role="region" aria-label="Your badges">
+				<span class="wp-seen-posts-achievements-title">Your badges</span>
+				<span class="wp-seen-posts-achievements-list" role="list">
+					<span class="wp-seen-posts-achievement wp-seen-posts-achievement-earned" role="listitem"><button class="wp-seen-posts-achievement-button"><img class="wp-seen-posts-achievement-image" src="../../assets/images/badges/beer.png" width="36" height="36" alt="Beer badge"></button></span>
+					<span class="wp-seen-posts-achievement wp-seen-posts-achievement-earned" role="listitem"><button class="wp-seen-posts-achievement-button"><img class="wp-seen-posts-achievement-image" src="../../assets/images/badges/vodka.png" width="36" height="36" alt="Vodka badge"></button></span>
+					<span class="wp-seen-posts-achievement wp-seen-posts-achievement-locked" role="listitem"><button class="wp-seen-posts-achievement-button"><img class="wp-seen-posts-achievement-image" src="../../assets/images/badges/gopnik.png" width="36" height="36" alt="Gopnik badge"></button></span>
+					<span class="wp-seen-posts-achievement wp-seen-posts-achievement-locked" role="listitem"><button class="wp-seen-posts-achievement-button"><img class="wp-seen-posts-achievement-image" src="../../assets/images/badges/bmw.png" width="36" height="36" alt="BMW badge"></button></span>
+					<span class="wp-seen-posts-achievement wp-seen-posts-achievement-locked is-explaining" role="listitem">
+						<button class="wp-seen-posts-achievement-button"><img class="wp-seen-posts-achievement-image" src="../../assets/images/badges/zapoi.png" width="36" height="36" alt="Zapoi badge"></button>
+						<span class="wp-seen-posts-achievement-tooltip" role="tooltip"><strong class="wp-seen-posts-achievement-tooltip-name">Zapoi badge</strong><span class="wp-seen-posts-achievement-tooltip-requirement">4-Day Vodka Streak</span><span class="wp-seen-posts-achievement-tooltip-description">Four days straight. This is officially a zapoi.</span><span class="wp-seen-posts-achievement-rarity">Unlocked by 3.7% of readers</span></span>
+					</span>
+				</span>
+				<span class="wp-seen-posts-achievements-hint">Tap a badge to see how it unlocks.</span>
+			</div>
+		</div>
+		<article style="border-top:1px solid #ddd; padding-top:32px"><h1>Feed begins without a layout jump</h1><p>The badge shelf and streak chip do not alter post-card placement.</p></article>
+	</main>
+</body>
+</html>
