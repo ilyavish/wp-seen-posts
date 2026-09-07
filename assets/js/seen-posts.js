@@ -122,7 +122,7 @@
 		var timers = new Map();
 		var seenCardCount = 0;
 		var hiddenCardCount = 0;
-		var showSeen = false;
+		var showSeen = window.location.hash === '#wp-seen-all';
 		var hiddenSessionSeen = new Set();
 		var feedExhausted = config.hasMorePages === false;
 		var infiniteReady = document.documentElement.classList.contains('wp-pfis-active');
@@ -482,6 +482,8 @@
 
 		var controls = document.createElement('div');
 		controls.className = 'wp-seen-posts-controls';
+		var historyTotal = document.createElement('span');
+		historyTotal.className = 'wp-seen-posts-history-total';
 		var actions = document.createElement('div');
 		actions.className = 'wp-seen-posts-actions';
 		var toggle = document.createElement('button');
@@ -506,6 +508,7 @@
 		achievementsHint.className = 'wp-seen-posts-achievements-hint';
 		achievementsHint.textContent = config.i18n.badgeHint || 'Tap a badge to see how it unlocks.';
 		actions.appendChild(toggle);
+		actions.appendChild(historyTotal);
 		actions.appendChild(reset);
 		controls.appendChild(actions);
 		achievements.appendChild(achievementsTitle);
@@ -726,9 +729,10 @@
 		function updateUi() {
 			updateAchievements();
 			var count = seenCardCount;
-			toggle.textContent = showSeen ? config.i18n.hideSeen : config.i18n.showSeen + ' (' + count + ')';
+			toggle.textContent = showSeen ? config.i18n.hideSeen : config.i18n.showSeen;
+			historyTotal.textContent = (config.i18n.historyTotal || 'Seen in this browser: %s').replace('%s', String(historyEntryCount));
 			toggle.setAttribute('aria-expanded', showSeen ? 'true' : 'false');
-			toggle.disabled = count === 0;
+			toggle.disabled = historyEntryCount === 0 && !showSeen;
 			reset.hidden = historyEntryCount === 0;
 			var visible = cards.size - hiddenCardCount;
 			var allHidden = !showSeen && cards.size > 0 && visible === 0 && count === cards.size;
@@ -940,6 +944,18 @@
 		}
 
 		function setShowSeen(value) {
+			// Restart at the archive beginning: skipped pages are not present in the DOM.
+			// A fragment enables Show mode without creating a new server cache variant.
+			var archiveStart = normalizedPageUrl(config.archiveStartUrl || '');
+			if (value && archiveStart) {
+				flushHistory(false);
+				var destination = new URL(archiveStart);
+				destination.hash = 'wp-seen-all';
+				var sameDocument = normalizedPageUrl(window.location.href) === archiveStart;
+				window.location.assign(destination.href);
+				if (sameDocument) window.location.reload();
+				return;
+			}
 			showSeen = value;
 			if (value) setUnseenSearchActive(false);
 			if (!value) {
@@ -1015,6 +1031,13 @@
 		});
 		window.addEventListener('load', function () { if (!infiniteReady) updateUi(); }, { once: true });
 
+		if (showSeen) {
+			reloadPreviewIds.clear();
+			// Consume the one-navigation mode; a later ordinary reload uses unseen mode.
+			var cleanUrl = new URL(window.location.href);
+			cleanUrl.hash = '';
+			window.history.replaceState(window.history.state, '', cleanUrl.href);
+		}
 		initializePosts(adapter.posts);
 		if (earlyHide) earlyHide.release();
 		document.documentElement.classList.add('wp-seen-posts-active');

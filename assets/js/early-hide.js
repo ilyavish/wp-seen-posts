@@ -2,6 +2,8 @@
 	'use strict';
 
 	var config = window.wpSeenPostsEarlyConfig || {};
+	// One-navigation display mode; keep normal archive HTML/cache keys.
+	if (window.location.hash === '#wp-seen-all') return;
 	var history;
 	try {
 		history = JSON.parse(window.localStorage.getItem(config.storageKey || 'wp_seen_posts_v1') || '{}');

@@ -512,3 +512,8 @@
 		transition: none !important;
 	}
 }
+
+.wp-seen-posts-history-total {
+	font-size: 0.85em;
+	opacity: 0.8;
+}
