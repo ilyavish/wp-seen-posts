@@ -251,3 +251,20 @@ if (
 }
 
 echo "PHP Top Seen widget checks passed.\n";
+
+class WP_REST_Request {
+ public function get_param( $key ) { return array( 'period' => 'week', 'limit' => 2, 'display' => 'text' )[ $key ]; }
+}
+function rest_ensure_response( $data ) {
+ return new class( $data ) {
+  public $data;
+  public $headers = array();
+  public function __construct( $data ) { $this->data = $data; }
+  public function header( $key, $value ) { $this->headers[ $key ] = $value; }
+ };
+}
+$response = Top_Seen_Widget::refresh( new WP_REST_Request() );
+if ( false === strpos( $response->data['html'], 'Last 7 days' ) || false === strpos( $response->data['html'], 'Article 18' ) || 'no-store, max-age=0' !== $response->headers['Cache-Control'] ) {
+ throw new RuntimeException( 'Fresh ranking endpoint output/cache headers failed.' );
+}
+echo "Top Seen refresh endpoint checks passed.\n";

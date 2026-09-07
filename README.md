@@ -99,3 +99,7 @@ The browser also dispatches `wpSeenPostsStreakUpdated` and `wpSeenPostsRaritiesU
 The “Show seen (N)” button counts retained entries in local browser history, including posts absent from the loaded page. It is not a site-wide visitor count or an account-synced history.
 
 Show seen restarts the current archive at page 1, displays both seen and unseen posts, and lets ordinary pagination load every page in order. This restores access to pages skipped by unseen discovery. A one-navigation URL fragment selects this mode and is consumed on startup; it does not change server cache keys. Hide seen restores filtering, and an ordinary reload returns to unseen mode. Saved history is never cleared by either toggle.
+
+## Top Seen refresh (1.4.4)
+
+Active widgets refresh their complete ranked list through a public read-only REST route after page load and every five minutes while visible. Identical widget requests are shared. Ranking results retain the existing five-minute server cache; displayed counts remain lifetime totals. A failed refresh leaves the current list intact. Clear the full-page cache once after installing so pages include the refresh script and widget wrapper.

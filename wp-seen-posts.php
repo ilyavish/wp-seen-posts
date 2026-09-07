@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks Seen posts, anonymous public counters, Top Seen rankings, and first-party views/visitors analytics.
- * Version:           1.4.3
+ * Version:           1.4.4
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.4.3';
+const VERSION = '1.4.4';
 const OPTION  = 'wp_seen_posts_selectors';
 const HOME_INDEX_TRANSIENT = 'wp_seen_posts_home_index_v1';
 
@@ -41,6 +41,8 @@ function enqueue_widget_assets(): void {
 		return;
 	}
 
+	wp_enqueue_script( 'wp-seen-posts-top-widget', plugins_url( 'assets/js/top-widget.js', __FILE__ ), array(), VERSION, true );
+	wp_add_inline_script( 'wp-seen-posts-top-widget', 'window.wpSeenTopConfig = ' . wp_json_encode( array( 'endpoint' => rest_url( 'wp-seen-posts/v1/top' ) ) ) . ';', 'before' );
 	wp_enqueue_style(
 		'wp-seen-posts-top-widget',
 		plugins_url( 'assets/css/top-seen-widget.css', __FILE__ ),

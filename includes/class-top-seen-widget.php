@@ -33,10 +33,51 @@ final class Top_Seen_Widget extends \WP_Widget {
 	/** Register the widget with WordPress. */
 	public static function register(): void {
 		register_widget( __CLASS__ );
+		add_action( 'rest_api_init', array( __CLASS__, 'register_routes' ) );
 	}
 
 	/** Render one configured widget instance. */
+	public static function register_routes(): void {
+		register_rest_route( Public_Counts::REST_NAMESPACE, '/top', array(
+			'methods' => 'GET',
+			'permission_callback' => '__return_true',
+			'callback' => array( __CLASS__, 'refresh' ),
+			'args' => array(
+				'period' => array( 'type' => 'string', 'enum' => array( 'today', 'week', 'month' ), 'default' => 'week' ),
+				'limit' => array( 'type' => 'integer', 'minimum' => 1, 'maximum' => 10, 'default' => 5 ),
+				'display' => array( 'type' => 'string', 'enum' => array( 'text', 'image', 'grid' ), 'default' => 'text' ),
+			),
+		) );
+	}
+
+	/** Public rendered rankings only; reuses the bounded five-minute ranking cache. */
+	public static function refresh( \WP_REST_Request $request ) {
+		$settings = self::sanitize_instance( array(
+			'period' => $request->get_param( 'period' ),
+			'limit' => $request->get_param( 'limit' ),
+			'display' => $request->get_param( 'display' ),
+			'title' => '',
+		) );
+		$widget = new self();
+		ob_start();
+		$widget->render_content( array( 'before_widget' => '', 'after_widget' => '', 'before_title' => '', 'after_title' => '' ), $settings );
+		$response = rest_ensure_response( array( 'html' => ob_get_clean() ) );
+		$response->header( 'Cache-Control', 'no-store, max-age=0' );
+		return $response;
+	}
+
 	public function widget( $args, $instance ): void {
+		$settings = self::sanitize_instance( is_array( $instance ) ? $instance : array() );
+		$title = apply_filters( 'widget_title', $settings['title'], $instance, $this->id_base );
+		echo $args['before_widget'];
+		if ( '' !== $title ) echo $args['before_title'] . esc_html( $title ) . $args['after_title'];
+		printf( '<div class="wp-seen-posts-top-live" data-period="%s" data-limit="%d" data-display="%s">', esc_attr( $settings['period'] ), $settings['limit'], esc_attr( $settings['display'] ) );
+		$settings['title'] = '';
+		$this->render_content( array( 'before_widget' => '', 'after_widget' => '', 'before_title' => '', 'after_title' => '' ), $settings );
+		echo '</div>' . $args['after_widget'];
+	}
+
+	private function render_content( $args, $instance ): void {
 		$settings = self::sanitize_instance( is_array( $instance ) ? $instance : array() );
 		$rows     = self::get_ranked_rows( $settings['period'], $settings['limit'] );
 		if ( ! $rows ) {
