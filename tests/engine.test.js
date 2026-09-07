@@ -295,7 +295,7 @@ test('initializes a large Seen history without calculating post-level badge layo
 	});
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 500);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
-	assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent, 'Show seen');
+	assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent, 'Show seen (500)');
 	assert.equal(computedStyleCalls, 0);
 
 	window.document.querySelector('.wp-seen-posts-toggle').click();
@@ -445,7 +445,7 @@ test('keeps a newly Seen card visible after it is scrolled past and reveals prio
 	assert.equal(newCard.querySelector(':scope > .wp-seen-posts-card-status .wp-seen-posts-public-count').dataset.personalSeenState, 'seen');
 	assert.equal(newCard.querySelector('.wp-seen-posts-badge'), null);
 	assert.equal(JSON.parse(window.localStorage.getItem('wp_seen_posts_v1'))['2'] > 0, true);
-	assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent, 'Show seen');
+	assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent, 'Show seen (2)');
 
 	observer.trigger(newCard, 0, -1);
 	assert.equal(newCard.classList.contains('wp-seen-posts-is-hidden'), false);
@@ -509,7 +509,7 @@ test('Show Seen is temporary and a reload returns to hidden history with preview
 
 	const reloaded = await boot(history, { postCount: 4 });
 	const toggle = reloaded.window.document.querySelector('.wp-seen-posts-toggle');
-	assert.equal(toggle.textContent, 'Show seen');
+	assert.equal(toggle.textContent, 'Show seen (4)');
 	assert.equal(toggle.getAttribute('aria-expanded'), 'false');
 	assert.equal(reloaded.window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 2);
 	assert.equal(reloaded.window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
@@ -1075,9 +1075,9 @@ test('history total includes stored posts absent from the loaded feed', async ()
  const now = Math.floor(Date.now() / 1000);
  const history = Object.fromEntries(Array.from({length:100},(_,i)=>[i+10,now]));
  const {window}=await boot(history);
- assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent,'Show seen');
+ assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent,'Show seen (100)');
  assert.equal(window.document.querySelector('.wp-seen-posts-toggle').disabled,false);
- assert.equal(window.document.querySelector('.wp-seen-posts-history-total').textContent,'Seen in this browser: 100');
+ assert.equal(window.document.querySelector('.wp-seen-posts-history-total'),null);
  assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-seen').length,0);
  window.close();
 });
@@ -1103,13 +1103,13 @@ test('Show mode survives the archive restart without hiding or skipping old post
  window.document.dispatchEvent(new window.CustomEvent('wpFeedPostsAdded',{detail:{container:feed,posts:[card]}}));
  await new Promise(r=>window.setTimeout(r,5));
  assert.equal(card.classList.contains('wp-seen-posts-is-hidden'),false);
- assert.equal(window.document.querySelector('.wp-seen-posts-history-total').textContent,'Seen in this browser: 4');
+ assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent,'Hide seen');
  window.close();
 });
 
-test('saved-history summary updates after cross-tab history changes',async()=>{
+test('button history total updates after cross-tab history changes',async()=>{
  const now=Math.floor(Date.now()/1000);const {window}=await boot({1:now});
  window.document.dispatchEvent(new window.Event('visibilitychange'));
  window.dispatchEvent(new window.StorageEvent('storage',{key:'wp_seen_posts_v1',newValue:JSON.stringify({1:now,50:now,51:now})}));
- assert.equal(window.document.querySelector('.wp-seen-posts-history-total').textContent,'Seen in this browser: 3');window.close();
+ assert.equal(window.document.querySelector('.wp-seen-posts-toggle').textContent,'Show seen (3)');window.close();
 });

@@ -482,8 +482,6 @@
 
 		var controls = document.createElement('div');
 		controls.className = 'wp-seen-posts-controls';
-		var historyTotal = document.createElement('span');
-		historyTotal.className = 'wp-seen-posts-history-total';
 		var actions = document.createElement('div');
 		actions.className = 'wp-seen-posts-actions';
 		var toggle = document.createElement('button');
@@ -508,7 +506,6 @@
 		achievementsHint.className = 'wp-seen-posts-achievements-hint';
 		achievementsHint.textContent = config.i18n.badgeHint || 'Tap a badge to see how it unlocks.';
 		actions.appendChild(toggle);
-		actions.appendChild(historyTotal);
 		actions.appendChild(reset);
 		controls.appendChild(actions);
 		achievements.appendChild(achievementsTitle);
@@ -729,8 +726,7 @@
 		function updateUi() {
 			updateAchievements();
 			var count = seenCardCount;
-			toggle.textContent = showSeen ? config.i18n.hideSeen : config.i18n.showSeen;
-			historyTotal.textContent = (config.i18n.historyTotal || 'Seen in this browser: %s').replace('%s', String(historyEntryCount));
+			toggle.textContent = showSeen ? config.i18n.hideSeen : config.i18n.showSeen + ' (' + historyEntryCount + ')';
 			toggle.setAttribute('aria-expanded', showSeen ? 'true' : 'false');
 			toggle.disabled = historyEntryCount === 0 && !showSeen;
 			reset.hidden = historyEntryCount === 0;

@@ -94,8 +94,8 @@ Settings > Seen Posts contains the enable switch, visible-time delay, reload-ded
 
 The browser also dispatches `wpSeenPostsStreakUpdated` and `wpSeenPostsRaritiesUpdated` events.
 
-## Show seen and saved history (1.4.2)
+## Show seen and saved history (1.4.3)
 
-The separate “Seen in this browser” summary counts retained entries in local browser history, including posts absent from the loaded page. It is not a site-wide visitor count or an account-synced history.
+The “Show seen (N)” button counts retained entries in local browser history, including posts absent from the loaded page. It is not a site-wide visitor count or an account-synced history.
 
 Show seen restarts the current archive at page 1, displays both seen and unseen posts, and lets ordinary pagination load every page in order. This restores access to pages skipped by unseen discovery. A one-navigation URL fragment selects this mode and is consumed on startup; it does not change server cache keys. Hide seen restores filtering, and an ordinary reload returns to unseen mode. Saved history is never cleared by either toggle.
