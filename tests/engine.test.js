@@ -1049,3 +1049,24 @@ test('reset clears only Seen history and re-observes loaded cards', async () => 
 	assert.equal(observer.observed.has(oldCard), true);
 	assert.equal(preserved, 1);
 });
+
+ test('updated PFIS uses a scoped warm response and immediate search feedback', async () => {
+ const now = Math.floor(Date.now() / 1000);
+ let handler, loads = 0, originalFetch;
+ const { window } = await boot({ 1: now, 2: now }, {
+  hasMorePages: true, previewLoadingDelay: 0, unseenPrefetchPageLimit: 6,
+  homePostIndex: [1, 2, 3, 4], maxPages: 2,
+  beforeEval(w) {
+   originalFetch = w.fetch = async () => ({ ok: true, clone() { return this; } });
+   w.WPPFIS = { container: w.document.querySelector('#postlist'),
+    setRequestHandler(value) { handler = value; }, loadNext() { loads++; } };
+  }
+ });
+ assert.equal(window.fetch, originalFetch);
+ assert.equal(loads, 1);
+ assert.equal(typeof handler, 'function');
+ assert.equal((await handler('https://example.com/page/2/', {})).ok, true);
+ assert.equal(window.document.querySelector('.wp-seen-posts-empty').hidden, false);
+ assert.equal(window.document.querySelector('.wp-seen-posts-empty').textContent, 'Finding unseen posts…');
+ window.close();
+});

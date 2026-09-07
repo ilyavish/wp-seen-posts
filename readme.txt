@@ -4,7 +4,7 @@ Tags: seen posts, unread, popular posts, analytics, p2
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -73,6 +73,9 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.4.1 =
+* Show unseen-search feedback immediately. Use the companion loader API and its scoped response provider when available; retain compatibility with PFIS 1.0.1.
 
 = 1.4.0 =
 * Adds standalone first-party views/visitors analytics for posts, pages, the homepage, archives, categories, tags, taxonomies, search, and 404 routes.

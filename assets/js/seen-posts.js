@@ -135,7 +135,7 @@
 		var achievementsInitialized = false;
 		var milestoneToast = null;
 		var milestoneToastTimer = null;
-		var previewLoadingDelay = safeNumber(config.previewLoadingDelay, 500);
+		var previewLoadingDelay = Math.max(0, Number(config.previewLoadingDelay) || 0);
 		var previewLoadingTimer = null;
 		var previewLoadingVisible = false;
 		var unseenPrefetchPageLimit = Math.max(0, Math.min(8, Math.floor(Number(config.unseenPrefetchPageLimit) || 0)));
@@ -153,6 +153,7 @@
 		}).filter(Boolean) : [];
 		var archiveMaxPages = Math.max(1, Math.floor(Number(config.maxPages) || 1));
 		var homeIndexWarmupStarted = false;
+		var requestBridgeInstalled = false;
 
 		function normalizedPageUrl(value) {
 			if (typeof value !== 'string' || !value) return '';
@@ -230,7 +231,7 @@
 
 		function installWarmedFetchBridge() {
 			if (!nativeFetch) return false;
-			if (window.fetch.wpSeenPostsWarmBridge) return true;
+			if (requestBridgeInstalled || window.fetch.wpSeenPostsWarmBridge) return true;
 			// PFIS remains the only code that parses and appends pages. This bridge merely
 			// gives its ordered GET requests HTML that is already downloading or cached.
 			var bridgedFetch = function (input, options) {
@@ -249,6 +250,13 @@
 					return nativeFetch(input, options);
 				});
 			};
+			var loader = window.WPPFIS;
+			if (loader && loader.container === feed && typeof loader.setRequestHandler === 'function') {
+				loader.setRequestHandler(bridgedFetch);
+				requestBridgeInstalled = true;
+				return true;
+			}
+			// Compatibility with PFIS 1.0.1; the updated companion never patches fetch.
 			bridgedFetch.wpSeenPostsWarmBridge = true;
 			try { window.fetch = bridgedFetch; } catch (error) { return false; }
 			return window.fetch === bridgedFetch;
@@ -684,6 +692,10 @@
 				return;
 			}
 			if (previewLoadingVisible || previewLoadingTimer) return;
+			if (previewLoadingDelay === 0) {
+				previewLoadingVisible = true;
+				return;
+			}
 			previewLoadingTimer = window.setTimeout(function () {
 				previewLoadingTimer = null;
 				previewLoadingVisible = true;
@@ -782,7 +794,9 @@
 			if (loadMore) {
 				warmUpcomingPages(loadMore.href || loadMore.getAttribute('href') || '');
 				unseenAdvancePending = true;
-				loadMore.click();
+				var loader = window.WPPFIS;
+				if (loader && loader.container === feed && typeof loader.loadNext === 'function') loader.loadNext();
+				else loadMore.click();
 			}
 		}
 
