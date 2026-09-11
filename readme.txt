@@ -4,7 +4,7 @@ Tags: seen posts, unread, popular posts, analytics, p2
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.4.4
+Stable tag: 1.4.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -73,6 +73,11 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.4.5 =
+* Keep automatic discovery running until it has assembled a useful five-post Unseen batch, instead of exposing Load more after the first sparse result.
+* Validate direct-jump archive HTML against current browser history and skip up to two stale all-Seen cache pages before handing content to infinite scroll.
+* Prewarm the following archive page when a direct jump contains fewer than five Unseen posts, with an eight-page safety cap for automatic filling.
 
 = 1.4.4 =
 * Refresh complete Top Seen rankings independently of full-page caching on load and every five minutes in visible tabs.

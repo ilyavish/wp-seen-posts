@@ -103,3 +103,7 @@ Show seen restarts the current archive at page 1, displays both seen and unseen 
 ## Top Seen refresh (1.4.4)
 
 Active widgets refresh their complete ranked list through a public read-only REST route after page load and every five minutes while visible. Identical widget requests are shared. Ranking results retain the existing five-minute server cache; displayed counts remain lifetime totals. A failed refresh leaves the current list intact. Clear the full-page cache once after installing so pages include the refresh script and widget wrapper.
+
+## Unseen batch discovery (1.4.5)
+
+When a returning reader's current archive page contains only Seen posts, discovery stays in one automatic run until five usable Unseen posts are buffered, the feed ends, a loader fallback is required, or the eight-page safety limit is reached. Indexed jumps validate the fetched archive HTML against current browser history, skip a small number of stale all-Seen cache pages, and prewarm the following page when the target batch is sparse.

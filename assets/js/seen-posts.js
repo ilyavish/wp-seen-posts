@@ -142,6 +142,9 @@
 		var unseenPrefetchConcurrency = Math.max(1, Math.min(6, Math.floor(Number(config.unseenPrefetchConcurrency) || 6)));
 		var unseenSearchActive = false;
 		var unseenAdvancePending = false;
+		var unseenSearchPagesRemaining = 0;
+		var unseenBatchSize = Math.max(1, Math.min(10, Math.floor(Number(config.unseenBatchSize) || 5)));
+		var unseenSearchPageLimit = Math.max(1, Math.min(12, Math.floor(Number(config.unseenSearchPageLimit) || 8)));
 		var infiniteControlsObserver = null;
 		var observedInfiniteControls = null;
 		var nativeFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
@@ -267,11 +270,82 @@
 			return response;
 		}
 
+		function isHiddenHistoryId(id) {
+			return historyAtLoad.has(id) || hiddenSessionSeen.has(id);
+		}
+
+		function inspectArchiveResponse(response, actualUrl) {
+			return response.clone().text().then(function (html) {
+				var parsed = new DOMParser().parseFromString(html, 'text/html');
+				var fetchedConfig = {
+					theme: adapter.name === 'p2' || adapter.name === 'p2-resurrected' ? adapter.name : config.theme,
+					selectors: adapter.name === 'manual' ? config.selectors : {}
+				};
+				var fetched = adapters.detect(parsed, fetchedConfig);
+				if (!fetched || fetched.name !== adapter.name) throw new Error('The warmed archive markup was incompatible.');
+				var companion = window.WPPFISAdapters && typeof window.WPPFISAdapters.detect === 'function'
+					? window.WPPFISAdapters.detect(parsed, fetchedConfig)
+					: null;
+				var usefulCount = 0;
+				fetched.posts.forEach(function (post) {
+					var id = adapters.postId(post);
+					if (id && !cards.has(id) && !isHiddenHistoryId(id)) usefulCount += 1;
+				});
+				return {
+					response: response,
+					url: actualUrl,
+					nextUrl: normalizedPageUrl(companion && companion.nextPageUrl ? companion.nextPageUrl : ''),
+					usefulCount: usefulCount
+				};
+			});
+		}
+
+		function firstUsefulArchiveResponse(response, actualUrl, remainingPages, visited) {
+			visited = visited || new Set();
+			visited.add(actualUrl);
+			return inspectArchiveResponse(response, actualUrl).then(function (result) {
+				if (result.usefulCount > 0 || remainingPages <= 1 || !result.nextUrl || visited.has(result.nextUrl)) return result;
+				return takePrewarmedOrRequest(result.nextUrl).then(function (nextResponse) {
+					return firstUsefulArchiveResponse(nextResponse, result.nextUrl, remainingPages - 1, visited);
+				});
+			});
+		}
+
+		function prepareIndexedSelection(responsePromise, requestedUrl, targetUrl) {
+			return responsePromise.then(function (response) {
+				return firstUsefulArchiveResponse(response, targetUrl, Math.min(3, unseenSearchPageLimit));
+			}).then(function (result) {
+				if (result.url !== requestedUrl) warmedPageAliases.set(requestedUrl, result.url);
+				if (result.usefulCount < unseenBatchSize) prewarmArchivePage(result.nextUrl);
+				return result.response;
+			}).catch(function () {
+				if (targetUrl !== requestedUrl) warmedPageAliases.set(requestedUrl, targetUrl);
+				return responsePromise;
+			});
+		}
+
 		function archiveRequest(url) {
 			return nativeFetch(url, {
 				credentials: 'same-origin',
 				headers: { Accept: 'text/html' }
 			}).then(validatedArchiveResponse);
+		}
+
+		function prewarmArchivePage(url) {
+			url = normalizedPageUrl(url);
+			if (!url || warmedPageResponses.has(url)) return;
+			var request = archiveRequest(url);
+			warmedPageResponses.set(url, request);
+			request.catch(function () {
+				if (warmedPageResponses.get(url) === request) warmedPageResponses.delete(url);
+			});
+		}
+
+		function takePrewarmedOrRequest(url) {
+			var warmed = warmedPageResponses.get(url);
+			if (!warmed) return archiveRequest(url);
+			warmedPageResponses.delete(url);
+			return warmed.catch(function () { return archiveRequest(url); });
 		}
 
 		function withTimeout(promise, milliseconds) {
@@ -300,7 +374,7 @@
 				if (pageOffset < baseRecordOffset || pageOffset >= lastIndexedRecord) break;
 				var localOffset = pageOffset - baseRecordOffset;
 				var pageIds = indexedIds.slice(localOffset, localOffset + pageSize);
-				if (pageIds.some(function (id) { return !historyAtLoad.has(id); })) return page;
+				if (pageIds.some(function (id) { return !isHiddenHistoryId(id); })) return page;
 			}
 
 			var firstUnindexedPage = Math.floor(lastIndexedRecord / pageSize) + 1;
@@ -323,6 +397,11 @@
 					var embeddedTargetUrl = archivePageUrl(startUrl, embeddedTargetPage);
 					if (!embeddedTargetUrl || !installWarmedFetchBridge()) return false;
 					homeIndexWarmupStarted = true;
+					var embeddedTargetIds = homePostIndex.slice((embeddedTargetPage - 1) * pageSize, embeddedTargetPage * pageSize);
+					var embeddedUsefulCount = embeddedTargetIds.filter(function (id) { return !isHiddenHistoryId(id); }).length;
+					if (embeddedUsefulCount < unseenBatchSize && embeddedTargetPage < archiveMaxPages) {
+						prewarmArchivePage(archivePageUrl(startUrl, embeddedTargetPage + 1));
+					}
 					var earlyTargetWarm = earlyHide && earlyHide.targetWarm;
 					var canReuseEarlyWarm = earlyTargetWarm
 						&& normalizedPageUrl(earlyTargetWarm.requestedUrl || '') === startUrl
@@ -332,10 +411,7 @@
 						? Promise.resolve(earlyTargetWarm.promise).then(validatedArchiveResponse).catch(function () { return archiveRequest(embeddedTargetUrl); })
 						: archiveRequest(embeddedTargetUrl);
 					if (earlyHide) earlyHide.targetWarm = null;
-					embeddedSelection = embeddedSelection.then(function (response) {
-						if (embeddedTargetUrl !== startUrl) warmedPageAliases.set(startUrl, embeddedTargetUrl);
-						return response;
-					});
+					embeddedSelection = prepareIndexedSelection(embeddedSelection, startUrl, embeddedTargetUrl);
 					warmedPageResponses.set(startUrl, embeddedSelection);
 					embeddedSelection.catch(function () {});
 					return true;
@@ -356,7 +432,7 @@
 
 			var fallbackRequest = requestArchive(startUrl);
 			fallbackRequest.catch(function () {});
-			var predictedPage = Math.max(firstNextPage, Math.floor(historyAtLoad.size / pageSize) + 1);
+			var predictedPage = Math.max(firstNextPage, Math.floor((historyAtLoad.size + hiddenSessionSeen.size) / pageSize) + 1);
 			predictedPage = Math.min(archiveMaxPages, predictedPage);
 			var predictedUrl = archivePageUrl(startUrl, predictedPage) || startUrl;
 			requestArchive(predictedUrl).catch(function () {});
@@ -388,10 +464,13 @@
 				var targetPage = targetPageFromIndex(indexedIds, baseRecordOffset, currentRecordOffset, firstNextPage, pageSize);
 				var targetUrl = archivePageUrl(startUrl, targetPage);
 				if (!targetUrl) throw new Error('The unseen archive page was invalid.');
-				return requestArchive(targetUrl).then(function (response) {
-					if (targetUrl !== startUrl) warmedPageAliases.set(startUrl, targetUrl);
-					return response;
-				});
+				var targetLocalOffset = (targetPage - 1) * pageSize - baseRecordOffset;
+				var targetIds = indexedIds.slice(targetLocalOffset, targetLocalOffset + pageSize);
+				var usefulCount = targetIds.filter(function (id) { return !isHiddenHistoryId(id); }).length;
+				if (usefulCount < unseenBatchSize && targetPage < archiveMaxPages) {
+					prewarmArchivePage(archivePageUrl(startUrl, targetPage + 1));
+				}
+				return prepareIndexedSelection(requestArchive(targetUrl), startUrl, targetUrl);
 			}).catch(function () {
 				return fallbackRequest;
 			});
@@ -703,17 +782,22 @@
 			}, previewLoadingDelay);
 		}
 
-		function hasStableVisibleCard() {
-			var found = false;
+		function stableVisibleCardCount() {
+			var count = 0;
 			cards.forEach(function (card, id) {
-				if (!reloadPreviewIds.has(id) && !card.classList.contains('wp-seen-posts-is-hidden')) found = true;
+				if (!reloadPreviewIds.has(id) && !card.classList.contains('wp-seen-posts-is-hidden')) count += 1;
 			});
-			return found;
+			return count;
+		}
+
+		function hasStableVisibleCard() {
+			return stableVisibleCardCount() > 0;
 		}
 
 		function setUnseenSearchActive(value) {
 			value = Boolean(value);
 			unseenSearchActive = value;
+			if (!value) unseenSearchPagesRemaining = 0;
 			document.documentElement.classList.toggle('wp-seen-posts-searching-unseen', value);
 			var infiniteControls = document.querySelector('.wp-pfis-controls');
 			if (infiniteControls) {
@@ -778,7 +862,12 @@
 				setUnseenSearchActive(false);
 				return;
 			}
-			if (hasStableVisibleCard()) {
+			var stableVisible = stableVisibleCardCount();
+			if (!unseenSearchActive && stableVisible > 0) {
+				setUnseenSearchActive(false);
+				return;
+			}
+			if (unseenSearchActive && (stableVisible >= unseenBatchSize || unseenSearchPagesRemaining <= 0)) {
 				setUnseenSearchActive(false);
 				return;
 			}
@@ -788,11 +877,15 @@
 				return;
 			}
 
-			setUnseenSearchActive(true);
+			if (!unseenSearchActive) {
+				unseenSearchPagesRemaining = unseenSearchPageLimit;
+				setUnseenSearchActive(true);
+			}
 			if (unseenAdvancePending) return;
 			var loadMore = document.querySelector('.wp-pfis-load-more:not([aria-disabled="true"]):not(:disabled)');
 			if (loadMore) {
 				warmUpcomingPages(loadMore.href || loadMore.getAttribute('href') || '');
+				unseenSearchPagesRemaining -= 1;
 				unseenAdvancePending = true;
 				var loader = window.WPPFIS;
 				if (loader && loader.container === feed && typeof loader.loadNext === 'function') loader.loadNext();

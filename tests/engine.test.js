@@ -88,6 +88,8 @@ async function boot(history = {}, options = {}) {
 		previewLoadingDelay: options.previewLoadingDelay ?? 1500,
 		unseenPrefetchPageLimit: options.unseenPrefetchPageLimit ?? 0,
 		unseenPrefetchConcurrency: options.unseenPrefetchConcurrency ?? 6,
+		unseenBatchSize: options.unseenBatchSize ?? 5,
+		unseenSearchPageLimit: options.unseenSearchPageLimit ?? 8,
 		restPostIndexUrl: options.restPostIndexUrl || '',
 		homePostIndex: options.homePostIndex || [],
 		maxPages: options.maxPages ?? 1,
@@ -689,6 +691,52 @@ test('uses the embedded validated home index to warm only the target page for 10
 	assert.deepEqual(requests, ['https://example.com/page/11/']);
 });
 
+test('skips a stale all-Seen indexed response before handing the page to the loader', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 87 }, (_, index) => [String(index + 1), now]));
+	const requests = [];
+	function archiveHtml(ids, nextPage) {
+		return `<!doctype html><html><body><ul id="postlist">${ids.map((id) => `<li id="prologue-${id}" class="post post-${id}">Post ${id}</li>`).join('')}</ul><nav><a class="next" href="https://example.com/page/${nextPage}/">Older</a></nav></body></html>`;
+	}
+	function responseFor(html) {
+		return { ok: true, clone: () => responseFor(html), text: () => Promise.resolve(html) };
+	}
+	const { window } = await boot(history, {
+		postCount: 10,
+		hasMorePages: true,
+		unseenPrefetchPageLimit: 6,
+		homePostIndex: Array.from({ length: 160 }, (_, index) => index + 1),
+		maxPages: 16,
+		beforeEval(currentWindow) {
+			currentWindow.WPPFISAdapters = {
+				detect(document) {
+					const feedContainer = document.querySelector('#postlist');
+					const next = document.querySelector('a.next');
+					return {
+						name: 'p2',
+						feedContainer,
+						posts: Array.from(feedContainer.querySelectorAll(':scope > li.post')),
+						nextPageUrl: next ? next.href : ''
+					};
+				}
+			};
+			currentWindow.fetch = (input) => {
+				const url = String(input);
+				requests.push(url);
+				if (url.endsWith('/page/9/')) return Promise.resolve(responseFor(archiveHtml(Array.from({ length: 10 }, (_, index) => index + 78), 10)));
+				if (url.endsWith('/page/10/')) return Promise.resolve(responseFor(archiveHtml(Array.from({ length: 10 }, (_, index) => index + 88), 11)));
+				throw new Error(`Unexpected request: ${url}`);
+			};
+		}
+	});
+
+	const response = await window.fetch('https://example.com/page/2/', { method: 'GET' });
+	const html = await response.text();
+	assert.match(html, /prologue-88/);
+	assert.equal(requests.length, 2);
+	assert.deepEqual(requests.slice().sort(), ['https://example.com/page/10/', 'https://example.com/page/9/'].sort());
+});
+
 test('reuses the target response already started by the head bootstrap', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const history = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [String(index + 1), now]));
@@ -900,6 +948,7 @@ test('resumes unseen discovery when the companion loader re-enables its button',
 		postCount: 3,
 		hasMorePages: true,
 		reloadPreviewCount: 0,
+		unseenBatchSize: 1,
 		beforeEval(currentWindow) {
 			currentWindow.document.querySelector('.wp-pfis-load-more').setAttribute('aria-disabled', 'true');
 		}
@@ -927,6 +976,52 @@ test('resumes unseen discovery when the companion loader re-enables its button',
 	assert.equal(window.document.documentElement.classList.contains('wp-seen-posts-searching-unseen'), false);
 	assert.equal(controls.hasAttribute('aria-busy'), false);
 	assert.equal(empty.hidden, true);
+});
+
+test('keeps automatic discovery active until a useful Unseen batch is ready', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 19 }, (_, index) => [String(index + 1), now]));
+	let loads = 0;
+	const { window } = await boot(history, {
+		postCount: 10,
+		hasMorePages: true,
+		reloadPreviewCount: 0,
+		unseenBatchSize: 5,
+		beforeEval(currentWindow) {
+			currentWindow.WPPFIS = {
+				container: currentWindow.document.querySelector('#postlist'),
+				loadNext() { loads += 1; },
+				setRequestHandler() {}
+			};
+		}
+	});
+	const feed = window.document.querySelector('#postlist');
+	function addPosts(ids) {
+		const posts = ids.map((id) => {
+			const post = window.document.createElement('li');
+			post.id = `prologue-${id}`;
+			post.className = `post post-${id}`;
+			feed.appendChild(post);
+			return post;
+		});
+		window.document.dispatchEvent(new window.CustomEvent('wpFeedPostsAdded', {
+			detail: { container: feed, posts }
+		}));
+	}
+
+	assert.equal(loads, 1);
+	assert.equal(window.document.documentElement.classList.contains('wp-seen-posts-searching-unseen'), true);
+	addPosts(Array.from({ length: 10 }, (_, index) => index + 11));
+	await new Promise((resolve) => window.setTimeout(resolve, 5));
+	assert.equal(loads, 2);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 19);
+	assert.equal(window.document.documentElement.classList.contains('wp-seen-posts-searching-unseen'), true);
+
+	addPosts([21, 22, 23, 24]);
+	await new Promise((resolve) => window.setTimeout(resolve, 5));
+	assert.equal(loads, 2);
+	assert.equal(window.document.querySelectorAll('[data-seen-post-state="unseen"]').length, 5);
+	assert.equal(window.document.documentElement.classList.contains('wp-seen-posts-searching-unseen'), false);
 });
 
 test('restores the companion loader fallback after an automatic search failure', async () => {
