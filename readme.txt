@@ -4,7 +4,7 @@ Tags: seen posts, unread, popular posts, analytics, p2
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.4.5
+Stable tag: 1.4.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -73,6 +73,12 @@ Infinite-scroll implementations may dispatch this event after appending posts:
 The supplied `posts` collection is initialized directly; the existing feed is not rescanned.
 
 == Changelog ==
+
+= 1.4.6 =
+* Keep unseen-discovery feedback visible through the complete automatic search and report partial results while more posts load.
+* Fill approximately one viewport of unseen content, with bounded count and page fallbacks for short cards, hidden tabs, and unmeasurable layouts.
+* Retain one clearly labelled Previously seen preview during slow reloads and keep newly Seen posts stable for the reading session.
+* Move the mobile badge roadmap into a secondary, horizontally scrollable shelf.
 
 = 1.4.5 =
 * Keep automatic discovery running until it has assembled a useful five-post Unseen batch, instead of exposing Load more after the first sparse result.

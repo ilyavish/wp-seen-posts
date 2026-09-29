@@ -128,6 +128,7 @@
 	function cancelPreview() {
 		previewCards.forEach(function (card) {
 			card.classList.remove('wp-seen-posts-prepreview');
+			delete card.dataset.seenPreviewLabel;
 			card.classList.add('wp-seen-posts-prehidden');
 		});
 		previewCards = [];
@@ -135,6 +136,7 @@
 
 	function reservePreview(element) {
 		element.classList.add('wp-seen-posts-prepreview');
+		element.dataset.seenPreviewLabel = config.previouslySeenLabel || 'Previously seen';
 		previewCards.push(element);
 	}
 
@@ -182,6 +184,7 @@
 			});
 			document.querySelectorAll('.wp-seen-posts-prepreview').forEach(function (card) {
 				card.classList.remove('wp-seen-posts-prepreview');
+				if (!card.classList.contains('wp-seen-posts-reload-preview')) delete card.dataset.seenPreviewLabel;
 			});
 		}
 	};

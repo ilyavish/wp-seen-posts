@@ -111,7 +111,7 @@
 		var milestones = readMilestones();
 		var reloadPreviewIds = new Set();
 		var reloadPreviewCount = Number(config.reloadPreviewCount);
-		if (!Number.isFinite(reloadPreviewCount) || reloadPreviewCount < 0) reloadPreviewCount = 2;
+		if (!Number.isFinite(reloadPreviewCount) || reloadPreviewCount < 0) reloadPreviewCount = 1;
 		reloadPreviewCount = Math.floor(reloadPreviewCount);
 		var initialPostIds = Array.prototype.map.call(adapter.posts || [], function (card) { return adapters.postId(card); }).filter(Boolean);
 		if (initialPostIds.length && initialPostIds.every(function (id) { return historyAtLoad.has(id); })) {
@@ -144,6 +144,8 @@
 		var unseenAdvancePending = false;
 		var unseenSearchPagesRemaining = 0;
 		var unseenBatchSize = Math.max(1, Math.min(10, Math.floor(Number(config.unseenBatchSize) || 5)));
+		var unseenMaxBatchSize = Math.max(unseenBatchSize, Math.min(20, Math.floor(Number(config.unseenMaxBatchSize) || 12)));
+		var unseenViewportRatio = Math.max(0.6, Math.min(1.5, Number(config.unseenViewportRatio) || 0.9));
 		var unseenSearchPageLimit = Math.max(1, Math.min(12, Math.floor(Number(config.unseenSearchPageLimit) || 8)));
 		var infiniteControlsObserver = null;
 		var observedInfiniteControls = null;
@@ -608,7 +610,15 @@
 			return historyAtLoad.has(id) || hiddenSessionSeen.has(id);
 		}
 
+		function updatePreviewMarker(card, id) {
+			var isPreview = reloadPreviewIds.has(id);
+			card.classList.toggle('wp-seen-posts-reload-preview', isPreview);
+			if (isPreview) card.dataset.seenPreviewLabel = config.i18n.previouslySeen || 'Previously seen';
+			else delete card.dataset.seenPreviewLabel;
+		}
+
 		function applyCardVisibility(card, id) {
+			updatePreviewMarker(card, id);
 			var hidden = card.classList.contains('wp-seen-posts-is-seen') && shouldHide(id);
 			var wasHidden = card.classList.contains('wp-seen-posts-is-hidden');
 			if (hidden !== wasHidden) hiddenCardCount += hidden ? 1 : -1;
@@ -782,16 +792,32 @@
 			}, previewLoadingDelay);
 		}
 
-		function stableVisibleCardCount() {
-			var count = 0;
+		function stableVisibleCards() {
+			var visibleCards = [];
 			cards.forEach(function (card, id) {
-				if (!reloadPreviewIds.has(id) && !card.classList.contains('wp-seen-posts-is-hidden')) count += 1;
+				if (!reloadPreviewIds.has(id) && !card.classList.contains('wp-seen-posts-is-hidden')) visibleCards.push(card);
 			});
-			return count;
+			return visibleCards;
 		}
 
-		function hasStableVisibleCard() {
-			return stableVisibleCardCount() > 0;
+		function stableVisibleCardCount() {
+			return stableVisibleCards().length;
+		}
+
+		function unseenViewportIsFilled() {
+			var visibleCards = stableVisibleCards();
+			if (!visibleCards.length) return false;
+			if (visibleCards.length >= unseenMaxBatchSize) return true;
+			var viewportHeight = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
+			var measuredHeight = visibleCards.reduce(function (total, card) {
+				var rect = typeof card.getBoundingClientRect === 'function' ? card.getBoundingClientRect() : null;
+				return total + Math.max(0, rect && rect.height || card.offsetHeight || 0);
+			}, 0);
+			if (viewportHeight > 0 && measuredHeight > 0) {
+				return measuredHeight >= Math.max(360, viewportHeight * unseenViewportRatio);
+			}
+			/* DOM emulators and hidden tabs have no usable layout measurements. */
+			return visibleCards.length >= unseenBatchSize;
 		}
 
 		function setUnseenSearchActive(value) {
@@ -820,9 +846,14 @@
 			var previewOnly = !showSeen && reloadPreviewIds.size > 0 && count === cards.size;
 			var waitingWithPreview = unseenSearchActive && previewOnly && canStillAdvance;
 			updatePreviewLoading(waitingWithPreview);
-			var findingUnseen = unseenSearchActive && canStillAdvance && !hasStableVisibleCard() && (!previewOnly || previewLoadingVisible);
+			var stableVisible = stableVisibleCardCount();
+			var findingUnseen = unseenSearchActive && canStillAdvance && (!previewOnly || previewLoadingVisible);
 			empty.textContent = findingUnseen
-				? (config.i18n.findingUnseen || 'Finding unseen posts…')
+				? (stableVisible > 0
+					? ((stableVisible === 1
+						? (config.i18n.foundOneUnseenLoading || '1 unseen post found — loading more…')
+						: (config.i18n.foundUnseenLoading || '%d unseen posts found — loading more…').replace('%d', String(stableVisible))))
+					: (config.i18n.findingUnseen || 'Finding unseen posts…'))
 				: (canStillAdvance ? config.i18n.loadingUnseen : (feedExhausted ? config.i18n.caughtUp : config.i18n.noUnseenPage));
 			empty.classList.toggle('wp-seen-posts-empty-loading', (allHidden && canStillAdvance) || findingUnseen);
 			empty.classList.toggle('wp-seen-posts-empty-preview-loading', waitingWithPreview && previewLoadingVisible);
@@ -867,7 +898,7 @@
 				setUnseenSearchActive(false);
 				return;
 			}
-			if (unseenSearchActive && (stableVisible >= unseenBatchSize || unseenSearchPagesRemaining <= 0)) {
+			if (unseenSearchActive && (unseenViewportIsFilled() || unseenSearchPagesRemaining <= 0)) {
 				setUnseenSearchActive(false);
 				return;
 			}
@@ -963,7 +994,7 @@
 					gamification.recordSeen(id, historyEntryCount);
 				}
 			}
-			card.classList.toggle('wp-seen-posts-reload-preview', reloadPreviewIds.has(id));
+			updatePreviewMarker(card, id);
 			observer.unobserve(card);
 			applyCardVisibility(card, id);
 			if (!deferUi) updateUi();
@@ -1054,7 +1085,6 @@
 				reloadPreviewIds.clear();
 			}
 			cards.forEach(function (card, id) {
-				card.classList.toggle('wp-seen-posts-reload-preview', reloadPreviewIds.has(id));
 				applyCardVisibility(card, id);
 			});
 			updateUi();
@@ -1084,6 +1114,7 @@
 			setUnseenSearchActive(false);
 			cards.forEach(function (card) {
 				card.classList.remove('wp-seen-posts-is-seen', 'wp-seen-posts-is-hidden', 'wp-seen-posts-reload-preview');
+				delete card.dataset.seenPreviewLabel;
 				card.removeAttribute('aria-hidden');
 				card.dataset.seenPostState = 'unseen';
 				if (publicCounts && typeof publicCounts.setPersonalState === 'function') publicCounts.setPersonalState(card, false);

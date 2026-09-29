@@ -14,6 +14,7 @@ function strings() {
 	return {
 		showSeen: 'Show seen', hideSeen: 'Hide seen', seen: 'Seen', reset: 'Reset seen history',
 		confirmReset: 'Reset?', loadingUnseen: 'Loading unseen posts…', findingUnseen: 'Finding unseen posts…', noUnseenPage: 'No unseen posts on this page.',
+		foundOneUnseenLoading: '1 unseen post found — loading more…', foundUnseenLoading: '%d unseen posts found — loading more…', previouslySeen: 'Previously seen',
 		caughtUp: "You're all caught up.", achievements: 'Your badges',
 		badgeHint: 'Tap a badge to see how it unlocks.', badgeLocked: 'Locked. See %1$d posts to unlock %2$s.',
 		achievementUnlocked: 'Achievement unlocked!'
@@ -84,11 +85,13 @@ async function boot(history = {}, options = {}) {
 	window.wpSeenPostsConfig = {
 		theme: 'p2', selectors: {}, storageKey: 'wp_seen_posts_v1', threshold: 0.5,
 		dwellTime: 5, hasMorePages: options.hasMorePages ?? false,
-		reloadPreviewCount: options.reloadPreviewCount ?? 2,
+		reloadPreviewCount: options.reloadPreviewCount ?? 1,
 		previewLoadingDelay: options.previewLoadingDelay ?? 1500,
 		unseenPrefetchPageLimit: options.unseenPrefetchPageLimit ?? 0,
 		unseenPrefetchConcurrency: options.unseenPrefetchConcurrency ?? 6,
 		unseenBatchSize: options.unseenBatchSize ?? 5,
+		unseenMaxBatchSize: options.unseenMaxBatchSize ?? 12,
+		unseenViewportRatio: options.unseenViewportRatio ?? 0.9,
 		unseenSearchPageLimit: options.unseenSearchPageLimit ?? 8,
 		restPostIndexUrl: options.restPostIndexUrl || '',
 		homePostIndex: options.homePostIndex || [],
@@ -202,7 +205,7 @@ test('keeps the feed eye at the bottom-right instead of placing it inline with W
 	assert.equal(card.classList.contains('wp-seen-posts-position-context'), true);
 });
 
-test('keeps the two-card preview visible before the footer engine starts', async () => {
+test('keeps one clearly labelled preview visible before the footer engine starts', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	let previewsBeforeEngine = 0;
 	let hiddenBeforeEngine = 0;
@@ -210,7 +213,7 @@ test('keeps the two-card preview visible before the footer engine starts', async
 		postCount: 4,
 		beforeEval(currentWindow) {
 			currentWindow.wpSeenPostsEarlyConfig = {
-				storageKey: 'wp_seen_posts_v1', previewCount: 2, previewSelector: '#postlist > li.post', seenLabel: 'Seen'
+				storageKey: 'wp_seen_posts_v1', previewCount: 1, previewSelector: '#postlist > li.post', previouslySeenLabel: 'Previously seen'
 			};
 			currentWindow.eval(earlyHide);
 			previewsBeforeEngine = currentWindow.document.querySelectorAll('.wp-seen-posts-prepreview').length;
@@ -218,14 +221,15 @@ test('keeps the two-card preview visible before the footer engine starts', async
 				assert.equal(currentWindow.document.querySelectorAll('.wp-seen-posts-prebadge').length, 0);
 		}
 	});
-	assert.equal(previewsBeforeEngine, 2);
-	assert.equal(hiddenBeforeEngine, 2);
+	assert.equal(previewsBeforeEngine, 1);
+	assert.equal(hiddenBeforeEngine, 3);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-prepreview, .wp-seen-posts-prehidden').length, 0);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-prebadge').length, 0);
 	assert.equal(window.document.querySelectorAll('.wp-seen-posts-badge').length, 0);
-	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview > .wp-seen-posts-card-status .wp-seen-posts-public-count').length, 2);
-	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 2);
-	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview > .wp-seen-posts-card-status .wp-seen-posts-public-count').length, 1);
+	assert.equal(window.document.querySelector('.wp-seen-posts-reload-preview').dataset.seenPreviewLabel, 'Previously seen');
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 1);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 3);
 });
 
 test('does not hide a reserved card when the parser reports it again', async () => {
@@ -513,8 +517,8 @@ test('Show Seen is temporary and a reload returns to hidden history with preview
 	const toggle = reloaded.window.document.querySelector('.wp-seen-posts-toggle');
 	assert.equal(toggle.textContent, 'Show seen (4)');
 	assert.equal(toggle.getAttribute('aria-expanded'), 'false');
-	assert.equal(reloaded.window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 2);
-	assert.equal(reloaded.window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
+	assert.equal(reloaded.window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 1);
+	assert.equal(reloaded.window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 3);
 });
 
 test('unlocks the beer milestone in the top shelf with a brief, explained achievement', async () => {
@@ -1024,6 +1028,57 @@ test('keeps automatic discovery active until a useful Unseen batch is ready', as
 	assert.equal(window.document.documentElement.classList.contains('wp-seen-posts-searching-unseen'), false);
 });
 
+test('fills a viewport in one continuous run with an 87-post Seen history', async () => {
+	const now = Math.floor(Date.now() / 1000);
+	const history = Object.fromEntries(Array.from({ length: 87 }, (_, index) => [String(index + 1), now]));
+	let loads = 0;
+	const { window } = await boot(history, {
+		postCount: 10,
+		hasMorePages: true,
+		unseenBatchSize: 5,
+		unseenMaxBatchSize: 12,
+		unseenViewportRatio: 0.9,
+		beforeEval(currentWindow) {
+			Object.defineProperty(currentWindow, 'innerHeight', { value: 800, configurable: true });
+			currentWindow.WPPFIS = {
+				container: currentWindow.document.querySelector('#postlist'),
+				loadNext() { loads += 1; },
+				setRequestHandler() {}
+			};
+		}
+	});
+	const feed = window.document.querySelector('#postlist');
+	const empty = window.document.querySelector('.wp-seen-posts-empty');
+	function addMeasuredPosts(ids, height) {
+		const posts = ids.map((id) => {
+			const post = window.document.createElement('li');
+			post.id = `prologue-${id}`;
+			post.className = `post post-${id}`;
+			post.getBoundingClientRect = () => ({ height, top: 0, bottom: height });
+			feed.appendChild(post);
+			return post;
+		});
+		window.document.dispatchEvent(new window.CustomEvent('wpFeedPostsAdded', {
+			detail: { container: feed, posts }
+		}));
+	}
+
+	assert.equal(loads, 1);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 1);
+	addMeasuredPosts([88, 89], 250);
+	await new Promise((resolve) => window.setTimeout(resolve, 5));
+	assert.equal(loads, 2);
+	assert.equal(empty.hidden, false);
+	assert.equal(empty.textContent, '2 unseen posts found — loading more…');
+
+	addMeasuredPosts([90], 300);
+	await new Promise((resolve) => window.setTimeout(resolve, 5));
+	assert.equal(loads, 2);
+	assert.equal(window.document.documentElement.classList.contains('wp-seen-posts-searching-unseen'), false);
+	assert.equal(empty.hidden, true);
+	assert.equal(window.document.querySelectorAll('[data-seen-post-state="unseen"]').length, 3);
+});
+
 test('restores the companion loader fallback after an automatic search failure', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const { window, loadMoreClicks } = await boot({ 1: now, 2: now }, {
@@ -1067,12 +1122,13 @@ test('replaces the immediate loading status with caught up only after the feed i
 	assert.equal(empty.classList.contains('wp-seen-posts-empty-loading'), false);
 });
 
-test('keeps two stable Seen previews and delays the finding-unseen status', async () => {
+test('keeps one labelled Seen preview and reports partial unseen discovery until it finishes', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const { window, loadMoreClicks } = await boot({ 1: now, 2: now, 3: now, 4: now }, { postCount: 4, hasMorePages: true, previewLoadingDelay: 10 });
-	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
-	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 2);
-	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview > .wp-seen-posts-card-status .wp-seen-posts-public-count-is-seen').length, 2);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 3);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 1);
+	assert.equal(window.document.querySelector('.wp-seen-posts-reload-preview').dataset.seenPreviewLabel, 'Previously seen');
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview > .wp-seen-posts-card-status .wp-seen-posts-public-count-is-seen').length, 1);
 	const empty = window.document.querySelector('.wp-seen-posts-empty');
 	assert.equal(empty.hidden, true);
 	assert.equal(empty.textContent, 'Loading unseen posts…');
@@ -1090,10 +1146,12 @@ test('keeps two stable Seen previews and delays the finding-unseen status', asyn
 	feed.appendChild(unseen);
 	window.document.dispatchEvent(new window.CustomEvent('wpFeedPostsAdded', { detail: { container: feed, posts: [unseen] } }));
 	await new Promise((resolve) => window.setTimeout(resolve, 5));
-	assert.equal(empty.hidden, true);
+	assert.equal(empty.hidden, false);
+	assert.equal(empty.textContent, '1 unseen post found — loading more…');
+	assert.equal(empty.classList.contains('wp-seen-posts-empty-searching'), true);
 	assert.equal(empty.classList.contains('wp-seen-posts-empty-preview-loading'), false);
-	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 2);
-	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 2);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-reload-preview').length, 1);
+	assert.equal(window.document.querySelectorAll('.wp-seen-posts-is-hidden').length, 3);
 
 	const toggle = window.document.querySelector('.wp-seen-posts-toggle');
 	toggle.click();
@@ -1103,7 +1161,7 @@ test('keeps two stable Seen previews and delays the finding-unseen status', asyn
 	assert.equal(unseen.classList.contains('wp-seen-posts-is-hidden'), false);
 });
 
-test('never flashes the finding-unseen status when unseen content arrives quickly', async () => {
+test('keeps partial-result feedback visible when unseen content arrives quickly', async () => {
 	const now = Math.floor(Date.now() / 1000);
 	const { window } = await boot({ 1: now, 2: now }, { hasMorePages: true, previewLoadingDelay: 15 });
 	const feed = window.document.querySelector('#postlist');
@@ -1114,7 +1172,8 @@ test('never flashes the finding-unseen status when unseen content arrives quickl
 	window.document.dispatchEvent(new window.CustomEvent('wpFeedPostsAdded', { detail: { container: feed, posts: [unseen] } }));
 	await new Promise((resolve) => window.setTimeout(resolve, 20));
 	const empty = window.document.querySelector('.wp-seen-posts-empty');
-	assert.equal(empty.hidden, true);
+	assert.equal(empty.hidden, false);
+	assert.equal(empty.textContent, '1 unseen post found — loading more…');
 	assert.equal(empty.classList.contains('wp-seen-posts-empty-preview-loading'), false);
 });
 

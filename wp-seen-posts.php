@@ -3,7 +3,7 @@
  * Plugin Name:       WP Seen Posts
  * Plugin URI:        https://github.com/ilyavish/wp-seen-posts
  * Description:       Tracks Seen posts, anonymous public counters, Top Seen rankings, and first-party views/visitors analytics.
- * Version:           1.4.5
+ * Version:           1.4.6
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            holdmyvodka.com
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '1.4.5';
+const VERSION = '1.4.6';
 const OPTION  = 'wp_seen_posts_selectors';
 const HOME_INDEX_TRANSIENT = 'wp_seen_posts_home_index_v1';
 
@@ -443,11 +443,13 @@ function enqueue_assets(): void {
 		'archiveStartUrl'             => get_pagenum_link( 1, false ),
 		'threshold'                   => 0.5,
 		'dwellTime'                   => 1000,
-		'reloadPreviewCount'          => 2,
+		'reloadPreviewCount'          => 1,
 		'previewLoadingDelay'         => 0,
 		'unseenPrefetchPageLimit'     => 6,
 		'unseenPrefetchConcurrency'   => 6,
 		'unseenBatchSize'             => 5,
+		'unseenMaxBatchSize'          => 12,
+		'unseenViewportRatio'         => 0.9,
 		'unseenSearchPageLimit'       => 8,
 		'restPostIndexUrl'            => is_home() ? rest_url( 'wp/v2/posts' ) : '',
 		'homePostIndex'               => $home_post_index,
@@ -463,6 +465,9 @@ function enqueue_assets(): void {
 			'confirmReset'   => __( 'Reset your Seen history and mark the loaded posts as unseen?', 'wp-seen-posts' ),
 			'loadingUnseen'  => __( 'Loading unseen posts…', 'wp-seen-posts' ),
 			'findingUnseen'  => __( 'Finding unseen posts…', 'wp-seen-posts' ),
+			'foundOneUnseenLoading' => __( '1 unseen post found — loading more…', 'wp-seen-posts' ),
+			'foundUnseenLoading' => __( '%d unseen posts found — loading more…', 'wp-seen-posts' ),
+			'previouslySeen' => __( 'Previously seen', 'wp-seen-posts' ),
 			'noUnseenPage'   => __( 'No unseen posts on this page.', 'wp-seen-posts' ),
 			'caughtUp'       => __( "You're all caught up.", 'wp-seen-posts' ),
 			'achievements'   => __( 'Your badges', 'wp-seen-posts' ),
@@ -475,7 +480,7 @@ function enqueue_assets(): void {
 	/** Filters the public JavaScript configuration. */
 	$config = apply_filters( 'wp_seen_posts_script_config', $config );
 	$storage_key = isset( $config['storageKey'] ) && is_string( $config['storageKey'] ) ? $config['storageKey'] : 'wp_seen_posts_v1';
-	$preview_count = isset( $config['reloadPreviewCount'] ) ? max( 0, (int) $config['reloadPreviewCount'] ) : 2;
+	$preview_count = isset( $config['reloadPreviewCount'] ) ? max( 0, (int) $config['reloadPreviewCount'] ) : 1;
 	$preview_selector = in_array( $theme_id, array( 'p2', 'p2-resurrected' ), true )
 		? '#postlist > li.post'
 		: '.wp-block-post-template > .wp-block-post';
@@ -490,6 +495,7 @@ function enqueue_assets(): void {
 				array(
 					'storageKey'      => $storage_key,
 					'previewCount'    => $preview_count,
+					'previouslySeenLabel' => isset( $config['i18n']['previouslySeen'] ) ? (string) $config['i18n']['previouslySeen'] : __( 'Previously seen', 'wp-seen-posts' ),
 					'previewSelector' => $preview_selector,
 					'maxEntries'      => $limits['max_entries'],
 					'retentionDays'   => $limits['retention_days'],

@@ -227,6 +227,24 @@
 .wp-seen-posts-prepreview,
 .wp-seen-posts-reload-preview {
 	opacity: 0.88;
+	position: relative;
+}
+
+.wp-seen-posts-prepreview::before,
+.wp-seen-posts-reload-preview::before {
+	background: rgba(29, 35, 39, 0.82);
+	border-radius: 999px;
+	color: #fff;
+	content: attr(data-seen-preview-label);
+	font-size: 0.7rem;
+	font-weight: 600;
+	line-height: 1;
+	padding: 0.35rem 0.55rem;
+	pointer-events: none;
+	position: absolute;
+	right: 0.65rem;
+	top: 0.65rem;
+	z-index: 2;
 }
 
 .wp-seen-posts-position-context {
@@ -458,14 +476,21 @@
 #main > .wp-seen-posts-empty { margin-left: 0; margin-right: 0; }
 
 @media (max-width: 600px) {
-	.wp-seen-posts-controls { gap: 0.6rem; }
+	.wp-seen-posts-controls {
+		align-items: stretch;
+		gap: 0.6rem;
+	}
 	.wp-seen-posts-actions { gap: 0.5rem; width: 100%; }
 	.wp-seen-posts-achievements {
+		align-items: flex-start;
+		box-sizing: border-box;
 		flex-wrap: wrap;
-		justify-content: flex-end;
-		margin-left: auto;
-		max-width: 290px;
+		justify-content: flex-start;
+		margin-left: 0;
+		max-width: 100%;
+		overflow: hidden;
 		padding: 0.42rem 0.5rem;
+		width: 100%;
 	}
 	.wp-seen-posts-streak {
 		font-size: 0.72rem;
@@ -473,8 +498,23 @@
 	}
 	.wp-seen-posts-achievements-title,
 	.wp-seen-posts-achievements-hint {
-		text-align: right;
+		text-align: left;
 		width: 100%;
+	}
+	.wp-seen-posts-achievements-list {
+		display: flex;
+		flex-wrap: nowrap;
+		justify-content: flex-start;
+		overflow-x: auto;
+		overflow-y: hidden;
+		scroll-behavior: smooth;
+		scroll-snap-type: x proximity;
+		-webkit-overflow-scrolling: touch;
+		width: 100%;
+	}
+	.wp-seen-posts-achievement {
+		flex: 0 0 auto;
+		scroll-snap-align: start;
 	}
 	.wp-seen-posts-achievements-hint {
 		color: #646970;
